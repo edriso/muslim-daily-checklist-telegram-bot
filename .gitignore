@@ -10,6 +10,3 @@ dist/
 Thumbs.db
 *.log
 .claude/
-
-# local manual test script, not committed
-scripts/send-test.ts

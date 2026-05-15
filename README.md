@@ -6,90 +6,159 @@ one channel and runs a **nightly anonymous self-review poll**.
 The poll is the heart of it: every night the bot asks "what did you
 complete today?" with the day's deeds as options. It is **anonymous and
 multiple-answer**, so Telegram tallies the votes and shows everyone the
-percentages — **nobody, not even this bot, sees who voted**. That gives
-the community motivation ("most people kept their azkar today") with no
+percentages. Nobody, not even this bot, sees who voted. That gives the
+community motivation ("most people kept their azkar today") with no
 showing-off and no database.
+
+## How it works (1-minute mental model)
+
+1. `src/schedules.ts` is a plain list. Each item says: a cron time, and
+   what to post (`kind: 'message'` with text, or `kind: 'poll'`).
+2. At boot, `scheduler.ts` registers every item with node-cron.
+3. When a time fires, it sends the message or poll to the channel.
+
+No database. To change anything you edit a file and restart the bot.
+That simplicity is on purpose: fewer moving parts means it keeps running
+for years untouched.
+
+## Project structure
+
+```
+src/
+  index.ts        Entry point: config -> bot -> scheduler -> health
+  config.ts       Reads env vars (BOT_TOKEN, CHANNEL_CHAT_ID, ...)
+  schedules.ts    THE FILE YOU EDIT MOST: the list of what/when
+  types.ts        ScheduleDef + PollSpec types
+  scheduler.ts    Registers schedules with cron, runs them
+  bot.ts          Grammy setup: /start + admin commands
+  health.ts       Tiny /health HTTP endpoint for uptime checks
+  content/        The Arabic texts + the poll definition
+  lib/            logger, pick (random/fixed), post (send msg + poll)
+scripts/
+  send-test.ts    Dev tool: post everything once to preview it
+docs/DEPLOY.md    How to deploy
+```
 
 ## What it posts (default, Africa/Cairo)
 
-| Name                | When            | What                                           |
-| ------------------- | --------------- | ---------------------------------------------- |
-| `morning_azkar`     | every day 06:00 | أذكار الصباح                                   |
-| `evening_azkar`     | every day 16:30 | أذكار المساء                                   |
-| `night_review_poll` | every day 21:00 | Anonymous self-review **poll** (the 5 deeds)   |
-| `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل    |
-| `friday_kahf`       | Friday 07:00    | سورة الكهف + الإكثار من الصلاة على النبي ﷺ     |
-| `fasting_reminder`  | Sun & Wed 20:00 | تذكير صيام الإثنين/الخميس (الليلة التي قبلهما) |
+| Name                | When            | What                                          |
+| ------------------- | --------------- | --------------------------------------------- |
+| `morning_azkar`     | every day 06:00 | أذكار الصباح                                  |
+| `evening_azkar`     | every day 16:30 | أذكار المساء                                  |
+| `night_review_poll` | every day 21:00 | Anonymous self-review **poll** (the 5 deeds)  |
+| `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل   |
+| `friday_kahf`       | Friday 07:00    | سورة الكهف + الإكثار من الصلاة على النبي ﷺ    |
+| `fasting_reminder`  | Sun & Wed 20:00 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها) |
 
-≈4 posts a day on purpose: too many notifications → people mute → a
-muted channel benefits no one.
+About 4 posts a day on purpose. Too many notifications make people mute
+the channel, and a muted channel benefits no one.
 
 ## ⚠️ Before going live: have the content reviewed
 
-The Arabic texts in `src/content/` are sourced from **حصن المسلم** with
-citations, but a bot whose whole purpose is reward must not risk
-misattributing words to the Prophet ﷺ. **Have a trusted طالب علم review
-`src/content/*.ts` once.** That single review is the most important step
-in the project — it locks the benefit and removes the risk.
+The Arabic texts in `src/content/` were verified against their sources
+(Bukhari, Muslim, the Sunan with gradings, and the canonical Hisn
+al-Muslim) and each file lists its takhreej. Still, a bot whose whole
+purpose is reward must not risk misattributing words to the Prophet ﷺ.
+**Have a trusted طالب علم read `src/content/*.ts` once.** That single
+review is the most important step in the project: it locks the benefit
+and removes the risk.
 
-## Quick start
+## Quick start (local development)
 
 ```bash
 pnpm install
 
 cp .env.example .env
-# Edit .env: BOT_TOKEN, CHANNEL_CHAT_ID (required)
-# Optional: ADMIN_TELEGRAM_ID, TZ_NAME (default Africa/Cairo)
+# Edit .env and set at least:
+#   BOT_TOKEN         from @BotFather
+#   CHANNEL_CHAT_ID   @yourchannel  (or numeric -100... for private)
+# Optional:
+#   ADMIN_TELEGRAM_ID  your numeric Telegram id (enables admin commands)
+#   TZ_NAME            default Africa/Cairo
 
 pnpm dev
 ```
 
-Add the bot to your channel as an admin with **"Post messages"**
-permission, or every post (and the poll) will 403.
+The bot must be added to your channel as an admin with the **"Post
+messages"** permission, or every post (and the poll) will fail with 403.
+
+## Previewing the messages without waiting (dev)
+
+You usually do not want to wait until 21:00 to see the night poll. Run
+the dev sender to post **everything once, right now**, then look at it
+in the channel:
+
+```bash
+pnpm send-test
+```
+
+- Needs the same `.env` (BOT_TOKEN + CHANNEL_CHAT_ID). It does **not**
+  require admin rights on the bot, unlike `/admin_run`.
+- It reuses the exact production send code, so what you see is what
+  subscribers get.
+- It prefixes a "🧪 test" banner. **Delete the test posts from the
+  channel afterwards**, they are not real scheduled content.
 
 ## Editing what it posts
 
-Everything lives in source — no database, redeploy to change it.
+Everything lives in source. No database; restart (or redeploy) to apply.
 
-- **Message text:** edit the matching file in `src/content/`.
-- **The poll:** edit `src/content/poll.ts` (question + the 5 options;
-  keep it anonymous + multi-answer).
-- **Times / new entries:** edit `src/schedules.ts`. Each entry is one
-  cron rule plus `kind: 'message'` or `kind: 'poll'`.
+- **Message wording:** edit the matching file in `src/content/`.
+- **The poll:** edit `src/content/poll.ts` (question + the 5 options).
+  Keep it anonymous and multiple-answer, that is the whole point.
+- **Times or new entries:** edit `src/schedules.ts`. Each entry is one
+  cron rule plus `kind: 'message'` (with `content`) or `kind: 'poll'`
+  (with `poll`).
 
-Cron is interpreted in `TZ_NAME`. Day-of-week: `0/7`=Sun … `5`=Fri.
-Keep new times at **02:00 or later** — Cairo's DST spring-forward skips
-the 00:00–00:59 hour once a year and node-cron drops jobs in that gap.
+Cron is read in `TZ_NAME`. Day-of-week: `0`/`7`=Sun, `1`=Mon, `5`=Fri.
+Keep new times at **02:00 or later**: once a year Cairo's clock jumps
+00:00 -> 01:00 (DST) and node-cron silently drops jobs in that gap.
 
-## Commands
+## Commands (in a Telegram DM to the bot)
 
-| Command             | Who    | What                                        |
-| ------------------- | ------ | ------------------------------------------- |
-| `/start`            | anyone | Short "channel-only" reply (AR/EN)          |
-| `/admin_health`     | admin  | Uptime, channel, registered schedules       |
-| `/admin_run <name>` | admin  | Fire one schedule now (real end-to-end run) |
+| Command             | Who    | What it does                                  |
+| ------------------- | ------ | --------------------------------------------- |
+| `/start`            | anyone | Short "this is channel-only" reply (AR/EN)    |
+| `/admin_health`     | admin  | Uptime, channel, list of registered schedules |
+| `/admin_run <name>` | admin  | Fire one schedule **now** (real end-to-end)   |
 
-Admin = the Telegram user whose ID equals `ADMIN_TELEGRAM_ID`. Leave it
-empty to disable admin commands entirely (set-and-forget deploy).
+Example: `/admin_run night_review_poll` posts the poll to the channel
+immediately.
 
-## Scripts
+**Who is "admin"?** Only the Telegram user whose numeric id equals
+`ADMIN_TELEGRAM_ID` in `.env`.
+
+- Find your numeric id by messaging [@userinfobot](https://t.me/userinfobot)
+  on Telegram; it replies with your `Id`.
+- Put it in `.env`: `ADMIN_TELEGRAM_ID="123456789"`.
+- Leave it empty to disable all admin commands (a safe set-and-forget
+  deploy).
+
+## npm scripts
 
 ```bash
-pnpm dev           # watch mode
-pnpm build         # tsc → dist/
-pnpm start         # run built bot
-pnpm test          # vitest (33 tests, no network/DB)
-pnpm typecheck     # tsc --noEmit
-pnpm format        # prettier --write
+pnpm dev           # run in watch mode (auto-restart on save)
+pnpm send-test     # dev: post every message + the poll once, then exit
+pnpm build         # type-check and compile to dist/
+pnpm start         # run the compiled bot (production)
+pnpm test          # run the test suite (37 tests, no network/DB)
+pnpm typecheck     # type-check only, no output
+pnpm format        # auto-format with Prettier
+pnpm format:check  # verify formatting (used before commits)
 ```
+
+## Deploying
+
+See `docs/DEPLOY.md`. In short: a host that keeps the process alive,
+`pnpm build` then `pnpm start`, the env vars set, and the bot added to
+the channel as an admin.
 
 ## What this is NOT
 
-No per-user tracking, no streaks, no personal history — those need a
-database and a subscriber bot, and would re-introduce the riya problem
-the anonymous poll avoids. This bot stays a simple, long-lived channel
-poster. That simplicity is intentional: fewer moving parts → it keeps
-running for years untouched.
+No per-user tracking, no streaks, no personal history. Those would need
+a database and a subscriber bot, and would re-introduce the showing-off
+(riya) problem the anonymous poll avoids. This bot stays a simple,
+long-lived channel poster on purpose.
 
 ## License
 

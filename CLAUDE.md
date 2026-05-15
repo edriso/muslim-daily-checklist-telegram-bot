@@ -22,6 +22,7 @@ muslim-daily-checklist-telegram-bot-channel/
 │   ├── health.ts       /health HTTP endpoint
 │   ├── content/        Arabic content modules + poll spec
 │   └── lib/            logger, pick (random/static), post (msg + poll)
+├── scripts/send-test.ts  Manual dev sender (not imported by the app)
 ├── docs/DEPLOY.md
 ├── package.json
 └── tsconfig.json
@@ -98,9 +99,15 @@ reviewed once by a trusted طالب علم. Keep that notice in the files.
 
 ## Testing
 
-`pnpm test` — 33 tests, no network/DB: schedule + Telegram poll
+`pnpm test` — 37 tests, no network/DB: schedule + Telegram poll
 constraints, `post.ts` success/failure mocks (incl. close_date
-clamping), and `runSchedule` kind dispatch.
+clamping), `runSchedule` kind dispatch, and `resolvePort`.
+
+`pnpm send-test` runs `scripts/send-test.ts`: a manual dev tool that
+posts every message + the poll to the channel once and exits. It needs
+`.env` (BOT_TOKEN + CHANNEL_CHAT_ID) but NOT bot-admin rights (unlike
+`/admin_run`). It reuses the real send code, so it is a true
+end-to-end check. Not imported by the app; safe to keep in the repo.
 
 ## Git
 
