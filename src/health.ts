@@ -1,12 +1,34 @@
 import { createServer } from 'node:http';
 import { logger } from './lib/logger';
 
+const DEFAULT_PORT = 8080;
+
+/**
+ * Resolve the health-server port from a raw env value.
+ *
+ * Robust on purpose: `.env.example` ships `PORT=""`, and `??` would NOT
+ * substitute an empty string, so `parseInt("")` → NaN → the bot used to
+ * crash with ERR_SOCKET_BAD_PORT. Blank, non-numeric, or out-of-range
+ * values all fall back to the default. Valid range is 1..65535 (0 would
+ * make Node pick a random port, useless for a fixed health probe).
+ *
+ * Exported for unit testing.
+ */
+export function resolvePort(raw: string | undefined): number {
+  const trimmed = raw?.trim();
+  if (!trimmed) return DEFAULT_PORT;
+  const n = Number.parseInt(trimmed, 10);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) return DEFAULT_PORT;
+  return n;
+}
+
 /**
  * Minimal /health endpoint for PaaS uptime checks. Returns 200 while the
- * process is alive. Bind failures are logged but never crash the bot.
+ * process is alive. A bad port or a bind failure is logged but never
+ * crashes the bot.
  */
 export function startHealthServer(): void {
-  const port = parseInt(process.env.PORT ?? '8080', 10);
+  const port = resolvePort(process.env.PORT);
 
   const server = createServer((req, res) => {
     if (req.method !== 'GET' || req.url !== '/health') {
@@ -31,7 +53,16 @@ export function startHealthServer(): void {
     });
   });
 
-  server.listen(port, () => {
-    logger.info('Health server listening', { port });
-  });
+  try {
+    server.listen(port, () => {
+      logger.info('Health server listening', { port });
+    });
+  } catch (err) {
+    // Belt-and-suspenders: the bot must keep running even if the health
+    // server cannot start. The docstring promises this.
+    logger.warn('Health server could not start, continuing without it', {
+      port,
+      error: String(err),
+    });
+  }
 }
