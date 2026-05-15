@@ -1,24 +1,27 @@
-# X Telegram Bot - Channel Scheduler - Repo Guide
+# Muslim Daily Checklist Bot — Repo Guide
 
 ## What this is
 
-A no-database Telegram bot that posts scheduled content to a single
-channel. Designed to be forked for any "post X at time Y" pattern,
-including daily Islamic azkar, motivational quotes, tips, reminders, etc.
+A no-database Telegram bot that posts daily Islamic reminders to one
+channel and runs a nightly **anonymous** self-review poll. The poll is
+anonymous + multiple-answer on purpose: Telegram aggregates the votes
+and shows percentages to everyone, nobody (including this bot) learns
+who voted. That delivers community motivation with no riya and no DB.
 
 ## Folder layout
 
 ```
-x-telegram-bot-channel-no-db/
+muslim-daily-checklist-telegram-bot-channel/
 ├── src/
-│   ├── index.ts        Entry point
-│   ├── config.ts       Reads BOT_TOKEN, CHANNEL_CHAT_ID, ADMIN_TELEGRAM_ID, TZ_NAME
-│   ├── bot.ts          Grammy setup, admin commands
-│   ├── scheduler.ts    Registers schedules with node-cron, exposes runSchedule
-│   ├── schedules.ts    THE EDIT POINT: array of (name, cron, content) defs
+│   ├── index.ts        Entry point (config → bot → scheduler → health)
+│   ├── config.ts       BOT_TOKEN, CHANNEL_CHAT_ID, ADMIN_TELEGRAM_ID, TZ_NAME
+│   ├── bot.ts          Grammy setup, /start + admin commands
+│   ├── scheduler.ts    node-cron registration; runSchedule() dispatch
+│   ├── schedules.ts    THE EDIT POINT: the schedule list + findSchedule
+│   ├── types.ts        ScheduleDef union + PollSpec (no import cycle)
 │   ├── health.ts       /health HTTP endpoint
-│   ├── content/        Plain TS arrays of message strings
-│   └── lib/            logger, pick (random/static), post (channel send)
+│   ├── content/        Arabic content modules + poll spec
+│   └── lib/            logger, pick (random/static), post (msg + poll)
 ├── docs/DEPLOY.md
 ├── package.json
 └── tsconfig.json
@@ -26,70 +29,78 @@ x-telegram-bot-channel-no-db/
 
 ## Tech stack
 
-| Layer    | Choice                                       |
-| -------- | -------------------------------------------- |
-| Bot      | TypeScript, Grammy, node-cron, Node 20+      |
-| Storage  | none                                         |
-| Packager | pnpm                                         |
+| Layer    | Choice                                  |
+| -------- | --------------------------------------- |
+| Bot      | TypeScript, Grammy, node-cron, Node 20+ |
+| Storage  | none                                    |
+| Packager | pnpm                                    |
 
 ## Design choices
 
-- **No database.** The bot is stateless. State lives in the source code:
-  cron expressions in `src/schedules.ts`, content in `src/content/`.
-  Re-deploying is the way to change schedules or messages.
-- **Schedules are declarative.** Each entry in `schedules.ts` is one
-  cron rule plus a content source. The scheduler iterates them at boot.
-  Adding a new schedule requires no other code changes.
-- **Content is either a fixed string or an array.** Single string = always
-  the same post. Array = random pick per tick. See `src/lib/pick.ts`.
-- **Channel ID is required at boot.** The bot exits if `CHANNEL_CHAT_ID`
-  is missing. There is nothing useful to do otherwise.
-- **Admin commands are optional.** If `ADMIN_TELEGRAM_ID` is empty,
-  /admin_* commands are no-ops. Useful for a "set-and-forget" deploy.
-- **Timezone is a single env var.** All schedules share `TZ_NAME`. Forks
-  that need multiple timezones can extend `ScheduleDef` with a per-rule
-  override.
-- **No retry logic on send failure.** A failed post is logged and that
-  tick is lost. The next scheduled fire takes over. For "must be
-  delivered" workflows, add retry or a tiny SQLite store; this skeleton
-  trades reliability for simplicity.
+- **No database.** State lives in source: cron in `schedules.ts`,
+  content in `content/`. Redeploy to change anything. This simplicity
+  is a feature: fewer parts → it runs untouched for years.
+- **Anonymous poll, not per-user tracking.** Streaks/personal history
+  would need a DB and a subscriber bot, and re-introduce showing-off
+  (riya). The anonymous poll keeps motivation without either. Do not
+  "upgrade" this without a deliberate decision.
+- **`ScheduleDef` is a discriminated union** (`kind: 'message' |
+'poll'`). `scheduler.ts#runSchedule` switches on `kind`. Adding a
+  schedule needs no other code change.
+- **Channel text uses NO `parse_mode`.** Arabic du'a/Quran references
+  contain `* _ ( ) <` etc. that Markdown/HTML would 400 on. Plain text
+  renders Arabic + emoji perfectly. Deliberate simplicity-over-styling.
+- **Poll options are `InputPollOption` objects.** Bot API 7.3+ changed
+  `options` from strings to `{ text }[]`; `lib/post.ts` does the map.
+- **`close_date` is clamped.** `sendPollToChannel` forces the close time
+  into Telegram's 5s … ~30d window so bad config can't 400 the API.
+- **Admin commands optional.** Empty `ADMIN_TELEGRAM_ID` → no-ops.
+- **No retry on send failure.** Logged, tick lost, next fire takes over.
 
-## How forks customise
+## Content authenticity (the spiritual core)
 
-Typical workflow for a domain fork (e.g. azkar bot):
+The bot's purpose is reward, so wrong attribution to the Prophet ﷺ is
+the worst failure mode. Content in `src/content/` is sourced from
+**حصن المسلم** with citations and carries a scholar-review notice.
+Quran is referenced ("اقرأ سورة كذا"), not reproduced, to avoid
+transcription error. Before any real launch the content must be
+reviewed once by a trusted طالب علم. Keep that notice in the files.
 
-1. Replace content files in `src/content/` with the new message lists.
-2. Edit `src/schedules.ts` to add/rename schedules and set their cron times.
-3. Set `TZ_NAME` in `.env` to the right timezone.
-4. Done. The framework code does not need to change.
+## How to change what it posts
+
+1. Message text → edit the file in `src/content/`.
+2. The poll → edit `src/content/poll.ts` (stay anonymous + multi).
+3. Times / new schedules → edit `src/schedules.ts`.
+   The framework code does not need to change.
 
 ## Environment variables
 
-| Variable             | Required | Notes                                          |
-| -------------------- | -------- | ---------------------------------------------- |
-| `BOT_TOKEN`          | yes      | From @BotFather                                |
-| `CHANNEL_CHAT_ID`    | yes      | `@channel` or numeric `-100...`                |
-| `ADMIN_TELEGRAM_ID`  | no       | Enables /admin_* commands                      |
-| `TZ_NAME`            | no       | Cron timezone, default UTC                     |
-| `NODE_ENV`           | no       | `production` for hosted                        |
-| `PORT`               | no       | /health server port (default 8080)             |
+| Variable            | Required | Notes                               |
+| ------------------- | -------- | ----------------------------------- |
+| `BOT_TOKEN`         | yes      | From @BotFather                     |
+| `CHANNEL_CHAT_ID`   | yes      | `@channel` or numeric `-100...`     |
+| `ADMIN_TELEGRAM_ID` | no       | Enables /admin\_\* commands         |
+| `TZ_NAME`           | no       | Cron timezone, default Africa/Cairo |
+| `NODE_ENV`          | no       | `production` for hosted             |
+| `PORT`              | no       | /health server port (default 8080)  |
 
 ## Common gotchas
 
-- The bot must be a channel admin with "Post messages" permission.
-  `sendMessage` will 403 otherwise.
-- Cron expressions are validated at boot with `cron.validate`. An
-  invalid expression is logged and that schedule is skipped, the others
-  still run.
-- `parse_mode: 'Markdown'` is hard-coded in `postToChannel`. If a
-  message contains a stray `_` or `*`, Telegram will 400 it. Either
-  escape user-controlled text or change the call to use plain text.
-- DST gotcha: node-cron silently drops jobs whose time does not exist
-  on the day the clock springs forward. For example in Africa/Cairo the
-  wall clock jumps from 00:00 to 01:00 on the last Friday of April, so
-  any cron between 00:00 and 00:59 is skipped that day. Keep schedules
-  at 01:00 or later (or anywhere from 02:00 onward to be extra safe) if
-  your `TZ_NAME` observes DST. Same rule applies to other DST zones.
+- The bot must be a channel admin with "Post messages" permission, or
+  `sendMessage`/`sendPoll` 403s.
+- Invalid cron is validated at boot, logged, and that one schedule is
+  skipped; the rest still run.
+- DST: node-cron silently drops a job whose wall-clock time does not
+  exist on the spring-forward day. Africa/Cairo jumps 00:00 → 01:00 on
+  the last Friday of April, so keep schedules at 02:00+ to be safe.
+- Tests load `config.ts` transitively; `vitest.config.ts` injects dummy
+  env so they need no real token.
+
+## Testing
+
+`pnpm test` — 33 tests, no network/DB: schedule + Telegram poll
+constraints, `post.ts` success/failure mocks (incl. close_date
+clamping), and `runSchedule` kind dispatch.
 
 ## Git
 

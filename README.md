@@ -1,29 +1,36 @@
-# X Telegram Bot - Channel Scheduler (no database)
+# Muslim Daily Checklist — Telegram Channel Bot
 
-A minimal Telegram bot that posts scheduled messages to a single channel.
-No database, no users, no votes. Just cron expressions plus content
-arrays.
+A small, no-database Telegram bot that posts daily Islamic reminders to
+one channel and runs a **nightly anonymous self-review poll**.
 
-Built to be forked for any "post X at time Y" use case. A planned fork
-posts daily Islamic azkar at fajr and maghrib.
+The poll is the heart of it: every night the bot asks "what did you
+complete today?" with the day's deeds as options. It is **anonymous and
+multiple-answer**, so Telegram tallies the votes and shows everyone the
+percentages — **nobody, not even this bot, sees who voted**. That gives
+the community motivation ("most people kept their azkar today") with no
+showing-off and no database.
 
-## What is inside
+## What it posts (default, Africa/Cairo)
 
-```
-x-telegram-bot-channel-no-db/
-├── src/
-│   ├── index.ts        Entry: load config, start bot + scheduler + health
-│   ├── config.ts       BOT_TOKEN, CHANNEL_CHAT_ID, TZ_NAME, ADMIN_TELEGRAM_ID
-│   ├── bot.ts          Grammy setup (/start, /admin_health, /admin_run)
-│   ├── scheduler.ts    Registers each entry from src/schedules.ts with node-cron
-│   ├── schedules.ts    THE FILE TO EDIT. List of (name, cron, content) rules
-│   ├── health.ts       /health HTTP endpoint
-│   ├── content/        Message arrays (morning / evening / tips by default)
-│   └── lib/            logger, pick, post-to-channel
-├── docs/DEPLOY.md
-├── package.json
-└── tsconfig.json
-```
+| Name                | When            | What                                           |
+| ------------------- | --------------- | ---------------------------------------------- |
+| `morning_azkar`     | every day 06:00 | أذكار الصباح                                   |
+| `evening_azkar`     | every day 16:30 | أذكار المساء                                   |
+| `night_review_poll` | every day 21:00 | Anonymous self-review **poll** (the 5 deeds)   |
+| `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل    |
+| `friday_kahf`       | Friday 07:00    | سورة الكهف + الإكثار من الصلاة على النبي ﷺ     |
+| `fasting_reminder`  | Sun & Wed 20:00 | تذكير صيام الإثنين/الخميس (الليلة التي قبلهما) |
+
+≈4 posts a day on purpose: too many notifications → people mute → a
+muted channel benefits no one.
+
+## ⚠️ Before going live: have the content reviewed
+
+The Arabic texts in `src/content/` are sourced from **حصن المسلم** with
+citations, but a bot whose whole purpose is reward must not risk
+misattributing words to the Prophet ﷺ. **Have a trusted طالب علم review
+`src/content/*.ts` once.** That single review is the most important step
+in the project — it locks the benefit and removes the risk.
 
 ## Quick start
 
@@ -32,54 +39,57 @@ pnpm install
 
 cp .env.example .env
 # Edit .env: BOT_TOKEN, CHANNEL_CHAT_ID (required)
-# Optional: ADMIN_TELEGRAM_ID, TZ_NAME
+# Optional: ADMIN_TELEGRAM_ID, TZ_NAME (default Africa/Cairo)
 
 pnpm dev
 ```
 
-Add the bot account to your channel as an admin with "Post messages"
-permission. Without that, every post will 403.
+Add the bot to your channel as an admin with **"Post messages"**
+permission, or every post (and the poll) will 403.
 
-## Default schedules
+## Editing what it posts
 
-| Name      | Cron (in TZ_NAME) | What it does                                  |
-| --------- | ----------------- | --------------------------------------------- |
-| `morning` | `0 8 * * *`       | Random pick from `src/content/morning.ts`     |
-| `evening` | `0 19 * * *`      | Random pick from `src/content/evening.ts`     |
-| `tip`     | `30 14 * * *`     | Random pick from `src/content/tips.ts`        |
+Everything lives in source — no database, redeploy to change it.
 
-Edit `src/schedules.ts` to change cron times, swap content sources, or
-add new entries. Each entry's `content` can be a single string (always
-posted) or an array (one picked at random per tick).
+- **Message text:** edit the matching file in `src/content/`.
+- **The poll:** edit `src/content/poll.ts` (question + the 5 options;
+  keep it anonymous + multi-answer).
+- **Times / new entries:** edit `src/schedules.ts`. Each entry is one
+  cron rule plus `kind: 'message'` or `kind: 'poll'`.
 
-If your `TZ_NAME` observes daylight saving time, avoid scheduling jobs
-inside the spring-forward gap. For example in `Africa/Cairo` the clock
-jumps from 00:00 to 01:00 on the last Friday of April, so cron times
-in that hour are silently skipped that day. Keep your schedules at
-01:00 or later when in doubt.
+Cron is interpreted in `TZ_NAME`. Day-of-week: `0/7`=Sun … `5`=Fri.
+Keep new times at **02:00 or later** — Cairo's DST spring-forward skips
+the 00:00–00:59 hour once a year and node-cron drops jobs in that gap.
 
 ## Commands
 
-| Command                 | Who    | What it does                            |
-| ----------------------- | ------ | --------------------------------------- |
-| `/start`                | anyone | Brief "this is channel-only" reply      |
-| `/admin_health`         | admin  | Uptime, channel, registered schedules   |
-| `/admin_run <name>`     | admin  | Manually fire one schedule by name      |
+| Command             | Who    | What                                        |
+| ------------------- | ------ | ------------------------------------------- |
+| `/start`            | anyone | Short "channel-only" reply (AR/EN)          |
+| `/admin_health`     | admin  | Uptime, channel, registered schedules       |
+| `/admin_run <name>` | admin  | Fire one schedule now (real end-to-end run) |
 
-Admin is the Telegram user matching `ADMIN_TELEGRAM_ID`. If that env is
-empty, no admin commands work.
+Admin = the Telegram user whose ID equals `ADMIN_TELEGRAM_ID`. Leave it
+empty to disable admin commands entirely (set-and-forget deploy).
 
-## How forks work
+## Scripts
 
-For a domain-specific bot (e.g. daily Islamic azkar):
+```bash
+pnpm dev           # watch mode
+pnpm build         # tsc → dist/
+pnpm start         # run built bot
+pnpm test          # vitest (33 tests, no network/DB)
+pnpm typecheck     # tsc --noEmit
+pnpm format        # prettier --write
+```
 
-1. Replace `src/content/*.ts` with your own message files.
-2. Edit `src/schedules.ts` to add or rename schedules and set their cron
-   times.
-3. Adjust `TZ_NAME` in .env to match your audience.
-4. Push.
+## What this is NOT
 
-The bot itself does not need to change.
+No per-user tracking, no streaks, no personal history — those need a
+database and a subscriber bot, and would re-introduce the riya problem
+the anonymous poll avoids. This bot stays a simple, long-lived channel
+poster. That simplicity is intentional: fewer moving parts → it keeps
+running for years untouched.
 
 ## License
 

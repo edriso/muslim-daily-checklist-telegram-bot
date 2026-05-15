@@ -4,19 +4,19 @@ The bot is a long-polling Grammy process. It needs:
 
 1. Node.js 20+ on a host that keeps long-lived processes alive.
 2. A Telegram channel the bot is admin of (with "Post messages"
-   permission).
+   permission) — required for both messages and the poll.
 3. The environment variables below.
 
 ## Environment variables (.env at repo root)
 
-| Variable             | Required | Notes                                                       |
-| -------------------- | -------- | ----------------------------------------------------------- |
-| `BOT_TOKEN`          | yes      | From @BotFather                                             |
-| `CHANNEL_CHAT_ID`    | yes      | `@channel` or numeric `-100...`                             |
-| `ADMIN_TELEGRAM_ID`  | no       | Enables /admin_* commands. Empty = no admin commands work.  |
-| `TZ_NAME`            | no       | Cron timezone, default UTC. Examples: `Africa/Cairo`        |
-| `NODE_ENV`           | no       | `production` for hosted deploys                             |
-| `PORT`               | no       | /health server port (default 8080)                          |
+| Variable            | Required | Notes                                                          |
+| ------------------- | -------- | -------------------------------------------------------------- |
+| `BOT_TOKEN`         | yes      | From @BotFather                                                |
+| `CHANNEL_CHAT_ID`   | yes      | `@channel` or numeric `-100...`                                |
+| `ADMIN_TELEGRAM_ID` | no       | Enables /admin\_\* commands. Empty = no admin commands work.   |
+| `TZ_NAME`           | no       | Cron timezone. Code default UTC; `.env.example` = Africa/Cairo |
+| `NODE_ENV`          | no       | `production` for hosted deploys                                |
+| `PORT`              | no       | /health server port (default 8080)                             |
 
 ## Adding the bot to your channel
 
@@ -39,8 +39,13 @@ cp .env.example .env
 pnpm dev
 ```
 
-Use `/admin_run morning` (after granting yourself admin) to fire any
-schedule by hand and confirm the channel receives it.
+Grant yourself admin (`ADMIN_TELEGRAM_ID`), then fire any schedule by
+hand to confirm the channel receives it, e.g.:
+
+```
+/admin_run morning_azkar
+/admin_run night_review_poll
+```
 
 ## Railway
 
@@ -51,17 +56,20 @@ schedule by hand and confirm the channel receives it.
 
 ## Editing schedules
 
-All schedule rules live in `src/schedules.ts`. Each entry is a `{ name,
-cron, content }` object. Add, remove, or edit entries and redeploy.
+All rules live in `src/schedules.ts`. Each entry is `{ name, kind, cron,
+... }` where `kind` is `'message'` (with `content`) or `'poll'` (with
+`poll`). Add, remove, or edit entries and redeploy.
 
-To change just the content (not the cron times), edit the files in
-`src/content/`. The scheduler picks a fresh random element each tick.
+To change only the wording, edit the files in `src/content/`. Message
+content is a fixed string (or an array → one random element per fire).
+The poll lives in `src/content/poll.ts`.
 
 ## Logs
 
 Every scheduled fire and every send writes a line to stdout. PaaS
 platforms capture stdout. To check whether today's posts ran, search
-the log for the schedule name or `Posted to channel`.
+the log for the schedule name, `Posted message to channel`, or
+`Posted poll to channel`.
 
 ## Healthcheck
 
