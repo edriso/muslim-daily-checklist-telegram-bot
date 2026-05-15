@@ -17,8 +17,10 @@ function isAdmin(ctx: Context): boolean {
 bot.command('start', async (ctx) => {
   if (ctx.chat?.type !== 'private') return;
   await ctx.reply(
-    'Hi! I only post on a schedule to my configured channel.\n\n' +
-      "There's nothing to interact with here.",
+    'السلام عليكم 🌿\n' +
+      'هذا بوت تذكيرٍ يومي ينشر في قناته المحدّدة فقط (أذكار ومراجعة الليلة).\n' +
+      'لا يوجد ما تتفاعل معه هنا — تابِع القناة لتصلك التذكيرات.\n\n' +
+      'This bot only posts on a schedule to its channel. Nothing to do here.',
   );
 });
 
@@ -39,7 +41,7 @@ bot.command('admin_health', async (ctx) => {
     `Schedules registered: ${schedules.length}`,
   ];
   for (const s of schedules) {
-    lines.push(`  - \`${s.name}\` (\`${s.cron}\`)`);
+    lines.push(`  - \`${s.name}\` [${s.kind}] (\`${s.cron}\`)`);
   }
   await ctx.reply(lines.join('\n'), { parse_mode: 'Markdown' });
 });
@@ -74,9 +76,7 @@ bot.catch((err) => {
 });
 
 async function setBotCommands() {
-  await bot.api.setMyCommands([
-    { command: 'start', description: 'About this bot' },
-  ]);
+  await bot.api.setMyCommands([{ command: 'start', description: 'About this bot' }]);
 }
 
 export { bot, setBotCommands };

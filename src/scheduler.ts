@@ -1,18 +1,28 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import type { Bot, Context } from 'grammy';
-import { schedules, type ScheduleDef } from './schedules';
+import { schedules } from './schedules';
+import type { ScheduleDef } from './types';
 import { pickContent } from './lib/pick';
-import { postToChannel } from './lib/post';
+import { postToChannel, sendPollToChannel } from './lib/post';
 import { logger } from './lib/logger';
 import { config } from './config';
 
 const tasks: ScheduledTask[] = [];
 
 /**
- * Run one schedule definition: pick its content, post to channel, log.
- * Exported so /admin_run can fire the same code path manually.
+ * Run one schedule definition and return the resulting message_id (or
+ * null if nothing was posted). Dispatches on `kind`:
+ *
+ *   - 'message' → pick content (fixed or random) and post as text.
+ *   - 'poll'    → send the anonymous self-review poll.
+ *
+ * Exported so `/admin_run` fires the exact same code path manually.
  */
 export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
+  if (def.kind === 'poll') {
+    return sendPollToChannel(bot, def.poll, { scheduleName: def.name });
+  }
+
   const text = pickContent(def.content);
   if (!text) {
     logger.warn('Schedule has no content to post, skipping', { name: def.name });
@@ -22,13 +32,13 @@ export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<
 }
 
 /**
- * Wrap a schedule callback with logging and error containment.
- * node-cron does not swallow rejected promises cleanly across versions,
- * so we catch here as belt-and-suspenders.
+ * Wrap a schedule callback with logging and error containment. node-cron
+ * does not swallow rejected promises cleanly across versions, so we
+ * catch here as belt-and-suspenders.
  */
 function trackedJob(bot: Bot<Context>, def: ScheduleDef): () => Promise<void> {
   return async () => {
-    logger.info('Schedule firing', { name: def.name });
+    logger.info('Schedule firing', { name: def.name, kind: def.kind });
     try {
       await runSchedule(bot, def);
     } catch (err) {
@@ -38,8 +48,9 @@ function trackedJob(bot: Bot<Context>, def: ScheduleDef): () => Promise<void> {
 }
 
 /**
- * Register every schedule from src/schedules.ts with node-cron. Returns
- * the count for an info log.
+ * Register every schedule from src/schedules.ts with node-cron. An
+ * invalid cron expression is logged and skipped; the others still run.
+ * Returns the number successfully registered.
  */
 export function startScheduler(bot: Bot<Context>): number {
   for (const def of schedules) {

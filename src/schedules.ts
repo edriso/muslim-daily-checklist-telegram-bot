@@ -1,54 +1,75 @@
-import { morningGreetings } from './content/morning';
-import { eveningGreetings } from './content/evening';
-import { tips } from './content/tips';
+import { morningAzkar } from './content/morningAzkar';
+import { eveningAzkar } from './content/eveningAzkar';
+import { preSleepReminder } from './content/preSleep';
+import { fridayKahf } from './content/fridayKahf';
+import { fastingReminder } from './content/fasting';
+import { nightReviewPoll } from './content/poll';
+import type { ScheduleDef } from './types';
+
+export type { ScheduleDef } from './types';
 
 /**
- * One scheduled posting rule.
+ * ───────────────────────── THE FILE TO EDIT ─────────────────────────
  *
- * `cron` uses the standard 5-field expression interpreted in the
- * timezone from `TZ_NAME` in .env. Common examples:
- *   '0 8 * * *'       every day at 08:00
- *   '0 19 * * *'      every day at 19:00
- *   '30 14 * * *'     every day at 14:30
- *   '0 9 * * 1'       every Monday at 09:00
+ * Every entry is one cron rule plus what to post. Two kinds:
  *
- * `content` is either:
- *   * a single string (always posted), or
- *   * an array of strings (one is picked at random per tick).
+ *   kind: 'message'  → posts text (a fixed string, or random from array)
+ *   kind: 'poll'     → sends the anonymous self-review poll
  *
- * `name` is used in logs and in /admin_run <name>. Keep it short and
- * unique. snake_case or kebab-case both work.
- */
-export interface ScheduleDef {
-  name: string;
-  cron: string;
-  content: string | readonly string[];
-  description?: string;
-}
-
-/**
- * The list of schedules. Add, remove, or edit entries to change what
- * the bot posts and when. Entries that share a `cron` time run in
- * parallel, so don't double-book the same minute unless you mean to.
+ * `cron` is a standard 5-field expression interpreted in TZ_NAME (.env,
+ * default Africa/Cairo). Day-of-week: 0/7 = Sunday, 1 = Monday, ...,
+ * 5 = Friday, 6 = Saturday.
+ *
+ * Times are all ≥ 02:00 on purpose: Africa/Cairo springs the clock from
+ * 00:00 → 01:00 on the last Friday of April, and node-cron silently
+ * drops jobs scheduled inside that missing hour. Keep new schedules at
+ * 02:00 or later if TZ_NAME observes DST. See CLAUDE.md.
+ *
+ * Cadence is intentionally calm (≈4 posts/day): too many notifications
+ * → people mute → a muted channel benefits no one.
  */
 export const schedules: ScheduleDef[] = [
   {
-    name: 'morning',
-    cron: '0 8 * * *',
-    content: morningGreetings,
-    description: 'Pick one of several morning greetings every day at 08:00.',
+    name: 'morning_azkar',
+    kind: 'message',
+    cron: '0 6 * * *',
+    content: morningAzkar,
+    description: 'أذكار الصباح — كل يوم 6:00 ص (داخل وقت الذكر صباحًا).',
   },
   {
-    name: 'evening',
-    cron: '0 19 * * *',
-    content: eveningGreetings,
-    description: 'Pick one of several evening greetings every day at 19:00.',
+    name: 'friday_kahf',
+    kind: 'message',
+    cron: '0 7 * * 5',
+    content: fridayKahf,
+    description: 'سورة الكهف + الصلاة على النبي — الجمعة 7:00 ص.',
   },
   {
-    name: 'tip',
-    cron: '30 14 * * *',
-    content: tips,
-    description: 'Pick one random tip every day at 14:30.',
+    name: 'fasting_reminder',
+    kind: 'message',
+    cron: '0 20 * * 0,3',
+    content: fastingReminder,
+    description: 'تذكير صيام الإثنين/الخميس — مساء الأحد والأربعاء 8:00 م.',
+  },
+  {
+    name: 'evening_azkar',
+    kind: 'message',
+    cron: '30 16 * * *',
+    content: eveningAzkar,
+    description: 'أذكار المساء — كل يوم 4:30 م (بعد العصر، قبل المغرب).',
+  },
+  {
+    name: 'night_review_poll',
+    kind: 'poll',
+    cron: '0 21 * * *',
+    poll: nightReviewPoll,
+    description: 'استبيان مراجعة الليلة (مجهول) — كل يوم 9:00 م.',
+  },
+  {
+    name: 'pre_sleep',
+    kind: 'message',
+    cron: '45 21 * * *',
+    content: preSleepReminder,
+    description: 'سورة المُلك + أذكار النوم + نيّة القيام — كل يوم 9:45 م.',
   },
 ];
 
