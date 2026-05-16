@@ -44,14 +44,19 @@ docs/DEPLOY.md    How to deploy
 | Name                | When            | What                                          |
 | ------------------- | --------------- | --------------------------------------------- |
 | `morning_azkar`     | every day 06:00 | أذكار الصباح                                  |
+| `friday_kahf`       | Friday 06:02    | سورة الكهف + الصلاة على النبي ﷺ (مع الصباح)   |
 | `evening_azkar`     | every day 16:30 | أذكار المساء                                  |
-| `night_review_poll` | every day 21:00 | Anonymous self-review **poll** (the 5 deeds)  |
+| `fasting_reminder`  | Sun & Wed 21:40 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها) |
+| `night_review_poll` | every day 21:43 | Anonymous self-review **poll** (the deeds)    |
 | `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل   |
-| `friday_kahf`       | Friday 07:00    | سورة الكهف + الإكثار من الصلاة على النبي ﷺ    |
-| `fasting_reminder`  | Sun & Wed 20:00 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها) |
 
-About 4 posts a day on purpose. Too many notifications make people mute
-the channel, and a muted channel benefits no one.
+Posts are deliberately **clustered into one tight window** so they land
+as a single "session", not scattered buzzes — what makes people mute a
+channel is the number of separate interruption moments, not the message
+count. The result is **≤3 notification moments a day**: a morning one
+(azkar, +Kahf on Friday), a late-afternoon one (evening azkar), and a
+bedtime one (poll → pre-sleep, +fasting reminder on Sun/Wed). The night
+ends on the azkar, not on the poll.
 
 ## ⚠️ Before going live: have the content reviewed
 
@@ -84,9 +89,9 @@ messages"** permission, or every post (and the poll) will fail with 403.
 
 ## Previewing the messages without waiting (dev)
 
-You usually do not want to wait until 21:00 to see the night poll. Run
-the dev sender to post **everything once, right now**, then look at it
-in the channel:
+You usually do not want to wait until the night cluster to see the
+poll. Run the dev sender to post **everything once, right now**, then
+look at it in the channel:
 
 ```bash
 pnpm send-test
