@@ -45,11 +45,16 @@ async function main() {
   );
   await sleep(1500);
 
+  // Ordered to mirror a real day so the preview reads the way
+  // subscribers see it: morning, then Friday Kahf, then the evening
+  // azkar, then the Sun/Wed fasting reminder. The poll and the
+  // pre-sleep reminder are sent after, in the same order as the bedtime
+  // cluster (poll, then pre-sleep last) so the preview also ends on the
+  // azkar, not on the poll.
   const messages: Array<[string, string]> = [
     ['morning_azkar', morningAzkar],
-    ['evening_azkar', eveningAzkar],
-    ['pre_sleep', preSleepReminder],
     ['friday_kahf', fridayKahf],
+    ['evening_azkar', eveningAzkar],
     ['fasting_reminder', fastingReminder],
   ];
 
@@ -63,6 +68,12 @@ async function main() {
     scheduleName: 'night_review_poll',
   });
   console.log(`  night_review_poll: ${pollId === null ? 'FAILED' : 'message ' + pollId}`);
+  await sleep(1500);
+
+  const preSleepId = await postToChannel(bot, preSleepReminder, {
+    scheduleName: 'pre_sleep',
+  });
+  console.log(`  pre_sleep: ${preSleepId === null ? 'FAILED' : 'message ' + preSleepId}`);
 
   console.log('Done. Remember to delete these test posts from the channel.');
   process.exit(0);

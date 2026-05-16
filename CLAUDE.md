@@ -1,4 +1,4 @@
-# Muslim Daily Checklist Bot — Repo Guide
+# Muslim Daily Checklist Bot: Repo Guide
 
 ## What this is
 
@@ -99,9 +99,12 @@ reviewed once by a trusted طالب علم. Keep that notice in the files.
 
 ## Testing
 
-`pnpm test` — 37 tests, no network/DB: schedule + Telegram poll
-constraints, `post.ts` success/failure mocks (incl. close_date
-clamping), `runSchedule` kind dispatch, and `resolvePort`.
+`pnpm test` runs fast unit tests with no network or database. They
+cover: schedule and Telegram poll constraints, `post.ts` success and
+failure mocks (including close_date clamping), `runSchedule` kind
+dispatch, `startScheduler` skipping an invalid cron, `pickContent`
+(blank and array handling), `channelUrlFrom`, and `resolvePort`. The
+count is intentionally not stated here so it never goes stale.
 
 `pnpm send-test` runs `scripts/send-test.ts`: a manual dev tool that
 posts every message + the poll to the channel once and exits. It needs

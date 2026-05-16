@@ -15,6 +15,17 @@ describe('pickContent', () => {
     expect(pickContent([])).toBe(null);
   });
 
+  it('returns null for an array of only blank strings', () => {
+    expect(pickContent(['', '   ', '\n\t'])).toBe(null);
+  });
+
+  it('never picks a blank entry from a mixed array', () => {
+    const arr = ['', '  ', 'real'];
+    for (let i = 0; i < 100; i++) {
+      expect(pickContent(arr)).toBe('real');
+    }
+  });
+
   it('returns the single element when the array has one item', () => {
     expect(pickContent(['only'])).toBe('only');
   });

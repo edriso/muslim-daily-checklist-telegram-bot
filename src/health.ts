@@ -7,17 +7,19 @@ const DEFAULT_PORT = 8080;
  * Resolve the health-server port from a raw env value.
  *
  * Robust on purpose: `.env.example` ships `PORT=""`, and `??` would NOT
- * substitute an empty string, so `parseInt("")` → NaN → the bot used to
- * crash with ERR_SOCKET_BAD_PORT. Blank, non-numeric, or out-of-range
- * values all fall back to the default. Valid range is 1..65535 (0 would
+ * substitute an empty string, so the bot used to crash with
+ * ERR_SOCKET_BAD_PORT. Blank, non-numeric, partly-numeric ("3000abc"),
+ * or out-of-range values all fall back to the default. We require the
+ * whole value to be digits rather than using parseInt, which would
+ * silently accept "3000abc" as 3000. Valid range is 1..65535 (0 would
  * make Node pick a random port, useless for a fixed health probe).
  *
  * Exported for unit testing.
  */
 export function resolvePort(raw: string | undefined): number {
   const trimmed = raw?.trim();
-  if (!trimmed) return DEFAULT_PORT;
-  const n = Number.parseInt(trimmed, 10);
+  if (!trimmed || !/^\d+$/.test(trimmed)) return DEFAULT_PORT;
+  const n = Number(trimmed);
   if (!Number.isInteger(n) || n < 1 || n > 65535) return DEFAULT_PORT;
   return n;
 }

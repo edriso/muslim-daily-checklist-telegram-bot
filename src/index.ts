@@ -24,15 +24,27 @@ async function main() {
   });
 }
 
-function shutdown(signal: string) {
+let shuttingDown = false;
+
+async function shutdown(signal: string) {
+  if (shuttingDown) return; // a second signal must not race the first
+  shuttingDown = true;
   logger.info(`${signal} received, shutting down...`);
   stopScheduler();
-  bot.stop();
+
+  // bot.stop() resolves once long polling has fully stopped. Await it so
+  // an in-flight update is not cut off mid-send, but cap the wait so a
+  // stuck network call cannot hang the process forever.
+  try {
+    await Promise.race([bot.stop(), new Promise((resolve) => setTimeout(resolve, 5_000))]);
+  } catch (err) {
+    logger.error('Error while stopping the bot', { error: String(err) });
+  }
   process.exit(0);
 }
 
-process.once('SIGINT', () => shutdown('SIGINT'));
-process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => void shutdown('SIGINT'));
+process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
 main().catch(async (err) => {
   logger.error('Fatal error', { error: String(err) });

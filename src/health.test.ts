@@ -26,6 +26,13 @@ describe('resolvePort', () => {
     expect(resolvePort('0')).toBe(8080);
     expect(resolvePort('-1')).toBe(8080);
     expect(resolvePort('70000')).toBe(8080);
-    expect(resolvePort('3000abc')).toBe(3000); // parseInt stops at junk
+  });
+
+  it('rejects partly-numeric values instead of guessing', () => {
+    // Must be all digits; "3000abc" is malformed config, not port 3000.
+    expect(resolvePort('3000abc')).toBe(8080);
+    expect(resolvePort('3000.5')).toBe(8080);
+    expect(resolvePort('0x1f90')).toBe(8080);
+    expect(resolvePort('+8080')).toBe(8080);
   });
 });

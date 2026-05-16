@@ -3,8 +3,8 @@
 The bot is a long-polling Grammy process. It needs:
 
 1. Node.js 20+ on a host that keeps long-lived processes alive.
-2. A Telegram channel the bot is admin of (with "Post messages"
-   permission) — required for both messages and the poll.
+2. A Telegram channel the bot is an admin of, with the "Post messages"
+   permission. This is required for both the messages and the poll.
 3. The environment variables below.
 
 ## Environment variables (.env at repo root)
@@ -20,9 +20,9 @@ The bot is a long-polling Grammy process. It needs:
 
 ## Adding the bot to your channel
 
-1. Channel settings -> Administrators -> Add admin.
+1. Open Channel settings, then Administrators, then Add admin.
 2. Search for your bot username.
-3. Grant at least "Post messages".
+3. Grant at least the "Post messages" permission.
 
 ## Finding `CHANNEL_CHAT_ID`
 
@@ -61,8 +61,8 @@ All rules live in `src/schedules.ts`. Each entry is `{ name, kind, cron,
 `poll`). Add, remove, or edit entries and redeploy.
 
 To change only the wording, edit the files in `src/content/`. Message
-content is a fixed string (or an array → one random element per fire).
-The poll lives in `src/content/poll.ts`.
+content is a fixed string, or an array (one random element is picked
+each time it fires). The poll lives in `src/content/poll.ts`.
 
 ## Logs
 

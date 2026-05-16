@@ -1,4 +1,4 @@
-# Muslim Daily Checklist — Telegram Channel Bot
+# Muslim Daily Checklist Telegram Channel Bot
 
 A small, no-database Telegram bot that posts daily Islamic reminders to
 one channel and runs a **nightly anonymous self-review poll**.
@@ -50,13 +50,17 @@ docs/DEPLOY.md    How to deploy
 | `night_review_poll` | every day 21:43 | Anonymous self-review **poll** (the deeds)    |
 | `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل   |
 
-Posts are deliberately **clustered into one tight window** so they land
-as a single "session", not scattered buzzes — what makes people mute a
-channel is the number of separate interruption moments, not the message
-count. The result is **≤3 notification moments a day**: a morning one
-(azkar, +Kahf on Friday), a late-afternoon one (evening azkar), and a
-bedtime one (poll → pre-sleep, +fasting reminder on Sun/Wed). The night
-ends on the azkar, not on the poll.
+Posts are deliberately grouped into one tight window so they arrive
+together as a single "session" instead of scattered buzzes. What makes
+people mute a channel is the number of separate interruption moments,
+not the message count. The result is **at most 3 moments a day**:
+
+1. A morning one (the azkar, plus Surah Al-Kahf on Friday).
+2. A late-afternoon one (the evening azkar).
+3. A bedtime one (the poll, then the pre-sleep reminder, plus the
+   fasting reminder on Sunday and Wednesday).
+
+The bedtime group ends on the azkar, not on the poll.
 
 ## ⚠️ Before going live: have the content reviewed
 
@@ -109,8 +113,9 @@ pnpm send-test
 Everything lives in source. No database; restart (or redeploy) to apply.
 
 - **Message wording:** edit the matching file in `src/content/`.
-- **The poll:** edit `src/content/poll.ts` (question + the 5 options).
-  Keep it anonymous and multiple-answer, that is the whole point.
+- **The poll:** edit `src/content/poll.ts` (the question and its
+  options). Keep it anonymous and multiple-answer, that is the whole
+  point.
 - **Times or new entries:** edit `src/schedules.ts`. Each entry is one
   cron rule plus `kind: 'message'` (with `content`) or `kind: 'poll'`
   (with `poll`).
@@ -131,11 +136,12 @@ Example: `/admin_run night_review_poll` posts the poll to the channel
 immediately.
 
 **Who is "admin"?** Only the Telegram user whose numeric id equals
-`ADMIN_TELEGRAM_ID` in `.env`, **and only in a private chat** with the
-bot — the same command in a group is ignored, so internals never leak
-there. To anyone else the admin commands are silent (they don't reveal
-they exist). If `/admin_run` can't post, it replies with *why* (most
-often: the bot isn't a channel admin with "Post messages").
+`ADMIN_TELEGRAM_ID` in `.env`, and only in a private chat with the bot.
+The same command sent in a group is ignored, so the channel id and
+schedule internals never leak there. To everyone else the admin
+commands are completely silent (they do not reveal that they exist). If
+`/admin_run` cannot post, it replies with the reason. The most common
+one is that the bot is not a channel admin with "Post messages".
 
 - Find your numeric id by messaging [@userinfobot](https://t.me/userinfobot)
   on Telegram; it replies with your `Id`.
@@ -150,7 +156,7 @@ pnpm dev           # run in watch mode (auto-restart on save)
 pnpm send-test     # dev: post every message + the poll once, then exit
 pnpm build         # type-check and compile to dist/
 pnpm start         # run the compiled bot (production)
-pnpm test          # run the test suite (37 tests, no network/DB)
+pnpm test          # run the test suite (fast, no network or database)
 pnpm typecheck     # type-check only, no output
 pnpm format        # auto-format with Prettier
 pnpm format:check  # verify formatting (used before commits)
