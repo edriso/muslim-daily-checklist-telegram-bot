@@ -131,7 +131,11 @@ Example: `/admin_run night_review_poll` posts the poll to the channel
 immediately.
 
 **Who is "admin"?** Only the Telegram user whose numeric id equals
-`ADMIN_TELEGRAM_ID` in `.env`.
+`ADMIN_TELEGRAM_ID` in `.env`, **and only in a private chat** with the
+bot — the same command in a group is ignored, so internals never leak
+there. To anyone else the admin commands are silent (they don't reveal
+they exist). If `/admin_run` can't post, it replies with *why* (most
+often: the bot isn't a channel admin with "Post messages").
 
 - Find your numeric id by messaging [@userinfobot](https://t.me/userinfobot)
   on Telegram; it replies with your `Id`.
