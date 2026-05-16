@@ -9,14 +9,20 @@ The bot is a long-polling Grammy process. It needs:
 
 ## Environment variables (.env at repo root)
 
-| Variable            | Required | Notes                                                          |
-| ------------------- | -------- | -------------------------------------------------------------- |
-| `BOT_TOKEN`         | yes      | From @BotFather                                                |
-| `CHANNEL_CHAT_ID`   | yes      | `@channel` or numeric `-100...`                                |
-| `ADMIN_TELEGRAM_ID` | no       | Enables /admin\_\* commands. Empty = no admin commands work.   |
-| `TZ_NAME`           | no       | Cron timezone. Code default UTC; `.env.example` = Africa/Cairo |
-| `NODE_ENV`          | no       | `production` for hosted deploys                                |
-| `PORT`              | no       | /health server port (default 8080)                             |
+| Variable             | Required | Notes                                                          |
+| -------------------- | -------- | -------------------------------------------------------------- |
+| `BOT_TOKEN`          | yes      | From @BotFather                                                |
+| `CHANNEL_CHAT_ID`    | yes      | Numeric `-100...` (recommended) or `@channel`. Not a URL.      |
+| `CHANNEL_PUBLIC_URL` | no       | Public link shown only in `/start`. Decoupled from sending.    |
+| `ADMIN_TELEGRAM_ID`  | no       | Enables /admin\_\* commands. Empty = no admin commands work.   |
+| `TZ_NAME`            | no       | Cron timezone. Code default UTC; `.env.example` = Africa/Cairo |
+| `NODE_ENV`           | no       | `production` for hosted deploys                                |
+| `PORT`               | no       | /health server port (default 8080)                             |
+
+`CHANNEL_CHAT_ID` should be the numeric id in production: it never
+changes, so posting can never break if the channel username is renamed.
+`CHANNEL_PUBLIC_URL` is purely cosmetic (the tap-through link in the
+`/start` reply) and is safe to leave empty for a private channel.
 
 ## Adding the bot to your channel
 
@@ -26,9 +32,15 @@ The bot is a long-polling Grammy process. It needs:
 
 ## Finding `CHANNEL_CHAT_ID`
 
-- Public channel: use the `@` handle. `CHANNEL_CHAT_ID="@yourchannel"`.
-- Private channel: forward any channel message to @username_to_id_bot.
-  It returns the numeric `-100...` ID.
+Get the numeric id and use it for both public and private channels:
+forward any channel message to @username_to_id_bot and it returns the
+`-100...` id. (A public `@handle` also works, but the numeric id is the
+safer production choice because it survives a username change.)
+
+For a public channel you also want the tap-through link in `/start`,
+set `CHANNEL_PUBLIC_URL` to the share link, for example
+`CHANNEL_PUBLIC_URL="https://t.me/yourchannel"`. Leave it empty for a
+private channel.
 
 ## Run locally
 

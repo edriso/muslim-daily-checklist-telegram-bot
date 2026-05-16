@@ -18,14 +18,19 @@ function optionalBigInt(raw: string | undefined): bigint | null {
 }
 
 /**
- * A public https://t.me/ link for the channel, or null if none can be
- * derived from CHANNEL_CHAT_ID. Only "@username" channels (or an
- * explicit t.me URL) have a stable public link; a numeric "-100..." id
- * has no link without an API call + admin rights, so callers just omit
- * the link in that case. Exported for unit testing.
+ * Turn a raw value into a public https://t.me/ link, or null if it has
+ * no derivable public link. Accepts an "@username", a "t.me/..." URL
+ * (with or without scheme), or a full "https://t.me/..." URL. A numeric
+ * "-100..." id returns null: it has no public link without an API call
+ * and admin rights, so callers just omit the link in that case.
+ *
+ * This is used for two inputs (see config below): the optional
+ * CHANNEL_PUBLIC_URL, and, as a fallback, CHANNEL_CHAT_ID itself (so a
+ * channel configured by "@username" still gets a link for free).
+ * Exported for unit testing.
  */
-export function channelUrlFrom(rawChatId: string): string | null {
-  const id = rawChatId.trim();
+export function channelUrlFrom(raw: string): string | null {
+  const id = raw.trim();
   if (id.startsWith('@')) {
     const handle = id.slice(1);
     return /^[A-Za-z0-9_]{4,32}$/.test(handle) ? `https://t.me/${handle}` : null;
@@ -35,15 +40,22 @@ export function channelUrlFrom(rawChatId: string): string | null {
 }
 
 const channelChatId = requireEnv('CHANNEL_CHAT_ID').trim();
+// Optional. The channel's public link, shown only by /start. Kept
+// SEPARATE from CHANNEL_CHAT_ID on purpose: posting should use the
+// stable numeric id (immune to username changes), while the cosmetic
+// link comes from here. Falls back to deriving from CHANNEL_CHAT_ID so
+// an "@username" setup still shows a link with no extra config.
+const channelPublicUrl = process.env.CHANNEL_PUBLIC_URL?.trim();
 
 export const config = Object.freeze({
   botToken: requireEnv('BOT_TOKEN'),
-  // REQUIRED. Accepts "@channel" or "-100..." numeric. Passed as-is to
-  // bot.api.sendMessage; Telegram accepts either form.
+  // REQUIRED. Best practice is the numeric "-100..." id (never changes,
+  // even if the channel username does). "@channel" also works. Passed
+  // as-is to bot.api.sendMessage. A t.me URL is NOT accepted here by
+  // Telegram; use CHANNEL_PUBLIC_URL for the link instead.
   channelChatId,
-  // Derived public link for the channel, or null for numeric-id-only
-  // channels. Used by /start to point DMs at the channel.
-  channelUrl: channelUrlFrom(channelChatId),
+  // Public link for /start, or null if none is configured/derivable.
+  channelUrl: channelUrlFrom(channelPublicUrl || channelChatId),
   // Optional. If unset, /admin_* commands won't authorise anyone.
   adminTelegramId: optionalBigInt(process.env.ADMIN_TELEGRAM_ID),
   // Timezone for every cron schedule in src/schedules.ts. Defaults to UTC.

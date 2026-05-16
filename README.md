@@ -79,9 +79,10 @@ pnpm install
 
 cp .env.example .env
 # Edit .env and set at least:
-#   BOT_TOKEN         from @BotFather
-#   CHANNEL_CHAT_ID   @yourchannel  (or numeric -100... for private)
+#   BOT_TOKEN          from @BotFather
+#   CHANNEL_CHAT_ID    numeric -100... (recommended) or @yourchannel
 # Optional:
+#   CHANNEL_PUBLIC_URL https://t.me/yourchannel  (tap-through link in /start)
 #   ADMIN_TELEGRAM_ID  your numeric Telegram id (enables admin commands)
 #   TZ_NAME            default Africa/Cairo
 

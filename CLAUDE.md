@@ -14,7 +14,7 @@ who voted. That delivers community motivation with no riya and no DB.
 muslim-daily-checklist-telegram-bot-channel/
 ├── src/
 │   ├── index.ts        Entry point (config → bot → scheduler → health)
-│   ├── config.ts       BOT_TOKEN, CHANNEL_CHAT_ID, ADMIN_TELEGRAM_ID, TZ_NAME
+│   ├── config.ts       env: BOT_TOKEN, CHANNEL_CHAT_ID, CHANNEL_PUBLIC_URL, ...
 │   ├── bot.ts          Grammy setup, /start + admin commands
 │   ├── scheduler.ts    node-cron registration; runSchedule() dispatch
 │   ├── schedules.ts    THE EDIT POINT: the schedule list + findSchedule
@@ -76,14 +76,22 @@ reviewed once by a trusted طالب علم. Keep that notice in the files.
 
 ## Environment variables
 
-| Variable            | Required | Notes                               |
-| ------------------- | -------- | ----------------------------------- |
-| `BOT_TOKEN`         | yes      | From @BotFather                     |
-| `CHANNEL_CHAT_ID`   | yes      | `@channel` or numeric `-100...`     |
-| `ADMIN_TELEGRAM_ID` | no       | Enables /admin\_\* commands         |
-| `TZ_NAME`           | no       | Cron timezone, default Africa/Cairo |
-| `NODE_ENV`          | no       | `production` for hosted             |
-| `PORT`              | no       | /health server port (default 8080)  |
+| Variable             | Required | Notes                                                 |
+| -------------------- | -------- | ----------------------------------------------------- |
+| `BOT_TOKEN`          | yes      | From @BotFather                                       |
+| `CHANNEL_CHAT_ID`    | yes      | Numeric `-100...` (recommended) or `@channel`         |
+| `CHANNEL_PUBLIC_URL` | no       | Public link for `/start` only; decoupled from sending |
+| `ADMIN_TELEGRAM_ID`  | no       | Enables /admin\_\* commands                           |
+| `TZ_NAME`            | no       | Cron timezone, default Africa/Cairo                   |
+| `NODE_ENV`           | no       | `production` for hosted                               |
+| `PORT`               | no       | /health server port (default 8080)                    |
+
+`CHANNEL_CHAT_ID` is sent to Telegram as-is; the numeric id is the safe
+production choice because it survives a username rename. The public
+link is deliberately a separate, optional variable so the cosmetic link
+can never break posting. If `CHANNEL_PUBLIC_URL` is unset, the link
+falls back to deriving from an `@username` chat id, else `/start` shows
+no link.
 
 ## Common gotchas
 
