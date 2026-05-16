@@ -16,11 +16,15 @@ function isAdmin(ctx: Context): boolean {
 // who DMs the bot looking for commands.
 bot.command('start', async (ctx) => {
   if (ctx.chat?.type !== 'private') return;
+  const link = config.channelUrl;
   await ctx.reply(
     'السلام عليكم 🌿\n' +
       'هذا بوت تذكيرٍ يومي ينشر في قناته المحدّدة فقط (أذكار ومراجعة الليلة).\n' +
-      'لا يوجد ما تتفاعل معه هنا، تابِع القناة لتصلك التذكيرات بإذن الله.\n\n' +
-      'This bot only posts on a schedule to its channel. Nothing to do here.',
+      'لا يوجد ما تتفاعل معه هنا، تابِع القناة لتصلك التذكيرات بإذن الله.' +
+      (link ? `\n📢 القناة: ${link}` : '') +
+      '\n\n' +
+      'This bot only posts on a schedule to its channel. Nothing to do here.' +
+      (link ? `\nChannel: ${link}` : ''),
   );
 });
 
