@@ -1,7 +1,7 @@
 import { morningAzkar } from './content/morningAzkar';
 import { eveningAzkar } from './content/eveningAzkar';
 import { preSleepReminder } from './content/preSleep';
-import { fridayKahf } from './content/fridayKahf';
+import { fridaySunnah } from './content/fridaySunnah';
 import { fastingReminder } from './content/fasting';
 import { nightReviewPoll } from './content/poll';
 import type { ScheduleDef } from './types';
@@ -31,7 +31,7 @@ export type { ScheduleDef } from './types';
  * posts are CO-SCHEDULED into one tight window (offset by a minute so
  * the arrival order is deterministic) and read as a single "session":
  *
- *   • Friday morning  → morning azkar + Kahf      (one morning ping)
+ *   • Friday morning  → morning azkar + Friday sunan (one morning ping)
  *   • Every night      → poll + pre-sleep          (one bedtime ping)
  *   • Sun/Wed night    → + fasting reminder        (folded into the
  *                                                   same bedtime ping)
@@ -54,11 +54,12 @@ export const schedules: ScheduleDef[] = [
     description: 'أذكار الصباح، كل يوم 6:00 ص (داخل وقت الذكر صباحًا).',
   },
   {
-    name: 'friday_kahf',
+    name: 'friday_sunnah',
     kind: 'message',
     cron: '2 6 * * 5',
-    content: fridayKahf,
-    description: 'سورة الكهف والصلاة على النبي، الجمعة 6:02 ص (مع أذكار الصباح).',
+    content: fridaySunnah,
+    description:
+      'سننُ الجمعة (الطهارة والزينة، التبكير، الكهف، الصلاة على النبي)، الجمعة 6:02 ص (مع أذكار الصباح).',
   },
   {
     name: 'evening_azkar',
