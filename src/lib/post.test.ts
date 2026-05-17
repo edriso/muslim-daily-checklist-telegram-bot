@@ -42,7 +42,7 @@ describe('rtlIsolate', () => {
   });
 
   it('preserves the original text verbatim between the marks', () => {
-    const original = 'ورد القرآن (ولو صفحة) 📖';
+    const original = 'ورد القرآن (ولو صفحة) 🔖';
     expect(rtlIsolate(original).slice(1, -1)).toBe(original);
   });
 });
