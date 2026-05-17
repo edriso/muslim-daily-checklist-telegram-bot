@@ -3,8 +3,8 @@
 A small, no-database Telegram bot that posts daily Islamic reminders to
 one channel and runs a **nightly anonymous self-review poll**.
 
-The poll is the heart of it: every night the bot asks "what did you
-complete today?" with the day's deeds as options. It is **anonymous and
+The poll is the heart of it: every night the bot asks you to take
+honest account of your day, with the day's deeds as options. It is **anonymous and
 multiple-answer**, so Telegram tallies the votes and shows everyone the
 percentages. Nobody, not even this bot, sees who voted. That gives the
 community motivation ("most people kept their azkar today") with no
@@ -41,14 +41,14 @@ docs/DEPLOY.md    How to deploy
 
 ## What it posts (default, Africa/Cairo)
 
-| Name                | When            | What                                          |
-| ------------------- | --------------- | --------------------------------------------- |
-| `morning_azkar`     | every day 06:00 | أذكار الصباح                                  |
-| `friday_kahf`       | Friday 06:02    | سورة الكهف + الصلاة على النبي ﷺ (مع الصباح)   |
-| `evening_azkar`     | every day 16:30 | أذكار المساء                                  |
-| `fasting_reminder`  | Sun & Wed 21:40 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها) |
-| `night_review_poll` | every day 21:43 | Anonymous self-review **poll** (the deeds)    |
-| `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل   |
+| Name                | When            | What                                                      |
+| ------------------- | --------------- | --------------------------------------------------------- |
+| `morning_azkar`     | every day 06:00 | أذكار الصباح                                              |
+| `friday_sunnah`     | Friday 06:02    | سنن الجمعة: طهارة وزينة، تبكير، الكهف، الصلاة على النبي ﷺ |
+| `evening_azkar`     | every day 16:30 | أذكار المساء                                              |
+| `fasting_reminder`  | Sun & Wed 21:40 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها)             |
+| `night_review_poll` | every day 21:43 | Anonymous self-review **poll** (the deeds)                |
+| `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل               |
 
 Posts are deliberately grouped into one tight window so they arrive
 together as a single "session" instead of scattered buzzes. What makes

@@ -27,7 +27,7 @@ import { postToChannel, sendPollToChannel } from '../src/lib/post';
 import { morningAzkar } from '../src/content/morningAzkar';
 import { eveningAzkar } from '../src/content/eveningAzkar';
 import { preSleepReminder } from '../src/content/preSleep';
-import { fridayKahf } from '../src/content/fridayKahf';
+import { fridaySunnah } from '../src/content/fridaySunnah';
 import { fastingReminder } from '../src/content/fasting';
 import { nightReviewPoll } from '../src/content/poll';
 
@@ -53,7 +53,7 @@ async function main() {
   // azkar, not on the poll.
   const messages: Array<[string, string]> = [
     ['morning_azkar', morningAzkar],
-    ['friday_kahf', fridayKahf],
+    ['friday_sunnah', fridaySunnah],
     ['evening_azkar', eveningAzkar],
     ['fasting_reminder', fastingReminder],
   ];
