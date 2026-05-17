@@ -40,6 +40,31 @@ export async function postToChannel(
 export const MIN_CLOSE_HOURS = 5 / 3600; // 5 seconds
 export const MAX_CLOSE_HOURS = 2_628_000 / 3600; // ~30.4 days
 
+/** Unicode bidi isolate (UAX #9): RLI … PDI. */
+const RLI = '\u2067'; // RIGHT-TO-LEFT ISOLATE
+const PDI = '\u2069'; // POP DIRECTIONAL ISOLATE
+
+/**
+ * Wrap one RTL line so Telegram cannot mis-order it in the poll-results
+ * view, WITHOUT using parse_mode.
+ *
+ * Poll text here is plain (this project forbids parse_mode — Arabic
+ * du'a contains `* _ ( ) <` that HTML/Markdown 400s on, see CLAUDE.md),
+ * so the HTML `dir="rtl"` trick is unavailable. The standards-correct
+ * plain-text equivalent is the bidi *isolate* pair: RLI pins the line's
+ * base direction to right-to-left, PDI closes the isolated run. Unlike
+ * a lone prepended RLM (which W3C calls a "goto-like" hack), the
+ * isolate also walls the line off from the vote %/count Telegram
+ * concatenates around each option — that surrounding number is exactly
+ * what was rendering on top of the (leading) emoji. Content keeps the
+ * emoji at the *end* of the string too (see content/poll.ts); the two
+ * together are the robust fix. Telegram still has its own open RTL poll
+ * bugs we can't reach, but this removes the collision we control.
+ */
+export function rtlIsolate(text: string): string {
+  return `${RLI}${text}${PDI}`;
+}
+
 /**
  * Send one anonymous poll to the channel (the nightly self-review).
  *
@@ -66,15 +91,22 @@ export async function sendPollToChannel(
   const closeDate = Math.floor(Date.now() / 1000) + Math.round(clampedHours * 3600);
 
   // Bot API 7.3+ expects an array of InputPollOption objects, not
-  // plain strings.
-  const options = spec.options.map((text) => ({ text }));
+  // plain strings. Each option (and the question) is bidi-isolated so
+  // Telegram's results view can't render the emoji on top of the vote
+  // numbers — see rtlIsolate above and content/poll.ts.
+  const options = spec.options.map((text) => ({ text: rtlIsolate(text) }));
 
   try {
-    const message = await bot.api.sendPoll(config.channelChatId, spec.question, options, {
-      is_anonymous: isAnonymous,
-      allows_multiple_answers: allowsMultiple,
-      close_date: closeDate,
-    });
+    const message = await bot.api.sendPoll(
+      config.channelChatId,
+      rtlIsolate(spec.question),
+      options,
+      {
+        is_anonymous: isAnonymous,
+        allows_multiple_answers: allowsMultiple,
+        close_date: closeDate,
+      },
+    );
     logger.info('Posted poll to channel', {
       scheduleName: meta.scheduleName,
       messageId: message.message_id,

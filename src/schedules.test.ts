@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import cron from 'node-cron';
 import { schedules, findSchedule } from './schedules';
-import { MIN_CLOSE_HOURS, MAX_CLOSE_HOURS } from './lib/post';
+import { MIN_CLOSE_HOURS, MAX_CLOSE_HOURS, rtlIsolate } from './lib/post';
 
 /**
  * The schedules array is the central config. These tests guard against
@@ -81,13 +81,18 @@ describe('poll schedules', () => {
       if (s.kind !== 'poll') continue; // narrow for TS
       const p = s.poll;
       expect(p.question.trim().length).toBeGreaterThan(0);
-      expect(p.question.length).toBeLessThanOrEqual(MAX_QUESTION_CHARS);
+      // Validate the length we ACTUALLY transmit: lib/post.ts wraps the
+      // question + every option in rtlIsolate (RLI..PDI = +2 code
+      // points). Telegram's limit applies to the sent string, so a near
+      // -limit author string must still fit after the wrap, or sendPoll
+      // 400s. Same defensive spirit as the close_date clamp.
+      expect(rtlIsolate(p.question).length).toBeLessThanOrEqual(MAX_QUESTION_CHARS);
 
       expect(p.options.length).toBeGreaterThanOrEqual(2);
       expect(p.options.length).toBeLessThanOrEqual(10);
       for (const opt of p.options) {
         expect(opt.trim().length).toBeGreaterThan(0);
-        expect(opt.length).toBeLessThanOrEqual(MAX_OPTION_CHARS);
+        expect(rtlIsolate(opt).length).toBeLessThanOrEqual(MAX_OPTION_CHARS);
       }
 
       // Options must be distinct, or the percentages are meaningless.

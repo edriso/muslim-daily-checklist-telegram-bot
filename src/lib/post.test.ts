@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Bot, Context } from 'grammy';
-import { postToChannel, sendPollToChannel, MIN_CLOSE_HOURS, MAX_CLOSE_HOURS } from './post';
+import {
+  postToChannel,
+  sendPollToChannel,
+  rtlIsolate,
+  MIN_CLOSE_HOURS,
+  MAX_CLOSE_HOURS,
+} from './post';
 import type { PollSpec } from '../types';
 
 /**
@@ -19,6 +25,27 @@ function fakeBot(overrides: {
     },
   } as unknown as Bot<Context>;
 }
+
+describe('rtlIsolate', () => {
+  const RLI = '\u2067';
+  const PDI = '\u2069';
+
+  it('wraps the string in RLI … PDI and nothing else', () => {
+    expect(rtlIsolate('أذكار الصباح 🌅')).toBe(`${RLI}أذكار الصباح 🌅${PDI}`);
+  });
+
+  it('adds exactly two code points (well under Telegram limits)', () => {
+    const wrapped = rtlIsolate('x');
+    expect([...wrapped]).toHaveLength(3);
+    expect(wrapped.startsWith(RLI)).toBe(true);
+    expect(wrapped.endsWith(PDI)).toBe(true);
+  });
+
+  it('preserves the original text verbatim between the marks', () => {
+    const original = 'ورد القرآن (ولو صفحة) 📖';
+    expect(rtlIsolate(original).slice(1, -1)).toBe(original);
+  });
+});
 
 describe('postToChannel', () => {
   it('returns the message_id on success', async () => {
@@ -59,19 +86,30 @@ describe('sendPollToChannel', () => {
     expect(id).toBe(99);
   });
 
-  it('defaults to anonymous + multi-answer and InputPollOption objects', async () => {
+  it('defaults to anonymous + multi-answer and bidi-isolated InputPollOption objects', async () => {
     const sendPoll = vi.fn().mockResolvedValue({ message_id: 1 });
     const bot = fakeBot({ sendPoll });
     await sendPollToChannel(bot, base);
     const [, question, options, other] = sendPoll.mock.calls[0];
-    expect(question).toBe(base.question);
+    expect(question).toBe(rtlIsolate(base.question));
     expect(options).toEqual([
-      { text: 'أذكار الصباح' },
-      { text: 'أذكار المساء' },
-      { text: 'سورة الملك' },
+      { text: rtlIsolate('أذكار الصباح') },
+      { text: rtlIsolate('أذكار المساء') },
+      { text: rtlIsolate('سورة الملك') },
     ]);
     expect(other.is_anonymous).toBe(true);
     expect(other.allows_multiple_answers).toBe(true);
+  });
+
+  it('sends the poll with NO parse_mode (the reason rtlIsolate exists)', async () => {
+    const sendPoll = vi.fn().mockResolvedValue({ message_id: 1 });
+    const bot = fakeBot({ sendPoll });
+    await sendPollToChannel(bot, base);
+    const other = sendPoll.mock.calls[0][3];
+    // The bidi fix must work on PLAIN text: parse_mode would 400 on the
+    // Arabic du'a punctuation, which is exactly why we cannot use the
+    // HTML dir="rtl" approach and use the Unicode isolate instead.
+    expect(other.parse_mode).toBeUndefined();
   });
 
   it('honours explicit isAnonymous:false / allowsMultipleAnswers:false', async () => {

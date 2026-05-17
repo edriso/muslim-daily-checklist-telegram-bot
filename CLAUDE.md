@@ -53,6 +53,13 @@ muslim-daily-checklist-telegram-bot-channel/
   renders Arabic + emoji perfectly. Deliberate simplicity-over-styling.
 - **Poll options are `InputPollOption` objects.** Bot API 7.3+ changed
   `options` from strings to `{ text }[]`; `lib/post.ts` does the map.
+- **Poll text is bidi-isolated (`rtlIsolate`).** Each option + the
+  question is wrapped in Unicode RLI…PDI (U+2067…U+2069) in
+  `lib/post.ts`. With no `parse_mode` the HTML `dir="rtl"` fix is out;
+  the isolate is the standards-correct plain-text equivalent — it pins
+  the line RTL and walls it off from the vote %/count Telegram appends,
+  which was rendering on top of the emoji. Content also keeps the emoji
+  at the _end_ of each string (see `content/poll.ts`). Keep both.
 - **`close_date` is clamped.** `sendPollToChannel` forces the close time
   into Telegram's 5s … ~30d window so bad config can't 400 the API.
 - **Admin commands optional.** Empty `ADMIN_TELEGRAM_ID` → no-ops.
@@ -70,7 +77,9 @@ reviewed once by a trusted طالب علم. Keep that notice in the files.
 ## How to change what it posts
 
 1. Message text → edit the file in `src/content/`.
-2. The poll → edit `src/content/poll.ts` (stay anonymous + multi).
+2. The poll → edit `src/content/poll.ts` (stay anonymous + multi;
+   keep any emoji at the **end** of each option/question and leave a
+   little margin under 100 chars — `rtlIsolate` adds 2; see below).
 3. Times / new schedules → edit `src/schedules.ts`.
    The framework code does not need to change.
 
