@@ -39,7 +39,7 @@ scripts/
 docs/DEPLOY.md    How to deploy
 ```
 
-## What it posts (default, Africa/Cairo)
+## What it posts (times assume Africa/Cairo, the .env.example default)
 
 | Name                | When            | What                                                      |
 | ------------------- | --------------- | --------------------------------------------------------- |
@@ -84,7 +84,8 @@ cp .env.example .env
 # Optional:
 #   CHANNEL_PUBLIC_URL https://t.me/yourchannel  (tap-through link in /start)
 #   ADMIN_TELEGRAM_ID  your numeric Telegram id (enables admin commands)
-#   TZ_NAME            default Africa/Cairo
+#   TZ_NAME            timezone for the cron times; .env.example uses
+#                      Africa/Cairo (code falls back to UTC if unset)
 
 pnpm dev
 ```

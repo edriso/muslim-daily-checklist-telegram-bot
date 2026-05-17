@@ -68,11 +68,14 @@ muslim-daily-checklist-telegram-bot-channel/
 ## Content authenticity (the spiritual core)
 
 The bot's purpose is reward, so wrong attribution to the Prophet ﷺ is
-the worst failure mode. Content in `src/content/` is sourced from
-**حصن المسلم** with citations and carries a scholar-review notice.
-Quran is referenced ("اقرأ سورة كذا"), not reproduced, to avoid
-transcription error. Before any real launch the content must be
-reviewed once by a trusted طالب علم. Keep that notice in the files.
+the worst failure mode. Every file in `src/content/` is verified
+against its sources — Bukhari, Muslim, the Sunan with their gradings,
+and the canonical **حصن المسلم** — and lists its own takhreej (تحقيق)
+plus a scholar-review notice. Quran is referenced ("اقرأ سورة كذا"),
+not reproduced, to avoid transcription error; where a du'a echoes an
+ayah it is marked as a du'a, not a Prophetic (marfūʿ) text. Before any
+real launch the content must be reviewed once by a trusted طالب علم.
+Keep those notices in the files.
 
 ## How to change what it posts
 
@@ -85,15 +88,15 @@ reviewed once by a trusted طالب علم. Keep that notice in the files.
 
 ## Environment variables
 
-| Variable             | Required | Notes                                                 |
-| -------------------- | -------- | ----------------------------------------------------- |
-| `BOT_TOKEN`          | yes      | From @BotFather                                       |
-| `CHANNEL_CHAT_ID`    | yes      | Numeric `-100...` (recommended) or `@channel`         |
-| `CHANNEL_PUBLIC_URL` | no       | Public link for `/start` only; decoupled from sending |
-| `ADMIN_TELEGRAM_ID`  | no       | Enables /admin\_\* commands                           |
-| `TZ_NAME`            | no       | Cron timezone, default Africa/Cairo                   |
-| `NODE_ENV`           | no       | `production` for hosted                               |
-| `PORT`               | no       | /health server port (default 8080)                    |
+| Variable             | Required | Notes                                                             |
+| -------------------- | -------- | ----------------------------------------------------------------- |
+| `BOT_TOKEN`          | yes      | From @BotFather                                                   |
+| `CHANNEL_CHAT_ID`    | yes      | Numeric `-100...` (recommended) or `@channel`                     |
+| `CHANNEL_PUBLIC_URL` | no       | Public link for `/start` only; decoupled from sending             |
+| `ADMIN_TELEGRAM_ID`  | no       | Enables /admin\_\* commands                                       |
+| `TZ_NAME`            | no       | Cron timezone. Code default UTC; `.env.example` sets Africa/Cairo |
+| `NODE_ENV`           | no       | `production` for hosted                                           |
+| `PORT`               | no       | /health server port (default 8080)                                |
 
 `CHANNEL_CHAT_ID` is sent to Telegram as-is; the numeric id is the safe
 production choice because it survives a username rename. The public
