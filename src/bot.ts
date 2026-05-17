@@ -33,10 +33,11 @@ bot.command('start', async (ctx) => {
     'السلام عليكم 🌿\n' +
       'هذا بوت تذكيرٍ يومي ينشر في قناته المحدّدة فقط (أذكار ومراجعة الليلة).\n' +
       'لا يوجد ما تتفاعل معه هنا، تابِع القناة لتصلك التذكيرات بإذن الله.' +
-      (link ? `\n📢 القناة: ${link}` : '') +
       '\n\n' +
       'This bot only posts on a schedule to its channel. Nothing to do here.' +
-      (link ? `\nChannel: ${link}` : ''),
+      // One language-neutral link after both blocks: a URL needs no
+      // translation, so printing it once (not per language) is cleaner.
+      (link ? `\n\n📢 ${link}` : ''),
   );
 });
 
