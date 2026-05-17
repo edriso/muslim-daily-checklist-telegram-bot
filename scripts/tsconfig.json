@@ -1,0 +1,13 @@
+{
+  // scripts/ is a dev-only helper area (send-test.ts), deliberately
+  // outside the production build (root tsconfig builds src/ → dist/).
+  // It still imports from ../src and uses Node globals (process), so it
+  // needs its own project config: inherit the root compiler options
+  // (incl. types:["node"]) but never emit.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true
+  },
+  "include": ["**/*", "../src/**/*"]
+}
