@@ -49,17 +49,25 @@ export const schedules: ScheduleDef[] = [
   {
     name: 'morning_azkar',
     kind: 'message',
-    cron: '0 6 * * *',
+    // 05:30 Cairo. Picked so the reminder lands INSIDE the preferred
+    // Fajr→sunrise window in every season — Cairo sunrise swings from
+    // ~5:55 (June, DST) to ~6:45 (December), and 05:30 sits inside
+    // both. 06:00 (the old time) drifts ~5 min past sunrise in summer.
+    cron: '30 5 * * *',
     content: morningAzkar,
-    description: 'أذكار الصباح، كل يوم 6:00 ص (داخل وقت الذكر صباحًا).',
+    description: 'أذكار الصباح، كل يوم 5:30 ص (داخل وقت الذكر بين الفجر وطلوع الشمس طوال السنة).',
   },
   {
     name: 'friday_sunnah',
     kind: 'message',
-    cron: '2 6 * * 5',
+    // 05:32 Cairo. Co-scheduled 2 min after morning_azkar (single
+    // morning ping). Kahf's recommended window is Maghrib-Thu through
+    // Maghrib-Fri, so exact morning time is forgiving; what matters
+    // is the bundle with the morning azkar arrival.
+    cron: '32 5 * * 5',
     content: fridaySunnah,
     description:
-      'سننُ الجمعة (الطهارة والزينة، التبكير، الكهف، الصلاة على النبي)، الجمعة 6:02 ص (مع أذكار الصباح).',
+      'سننُ الجمعة (الطهارة والزينة، التبكير، الكهف، الصلاة على النبي)، الجمعة 5:32 ص (مع أذكار الصباح).',
   },
   {
     name: 'evening_azkar',
