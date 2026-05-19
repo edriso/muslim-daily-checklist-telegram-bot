@@ -3,6 +3,7 @@ import { bot, setBotCommands } from './bot';
 import { startScheduler, stopScheduler } from './scheduler';
 import { startHealthServer } from './health';
 import { logger } from './lib/logger';
+import { initState } from './lib/state';
 
 async function main() {
   logger.info('Channel bot starting...', {
@@ -10,6 +11,11 @@ async function main() {
     isDev: config.isDev,
     channelChatId: config.channelChatId,
   });
+
+  // Load the pointer file BEFORE the scheduler so the first fire of any
+  // message schedule already knows which previous message_id (if any)
+  // to delete after posting the new copy.
+  await initState(config.stateFilePath);
 
   await setBotCommands();
   startScheduler(bot);

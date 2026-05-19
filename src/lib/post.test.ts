@@ -3,6 +3,7 @@ import type { Bot, Context } from 'grammy';
 import {
   postToChannel,
   sendPollToChannel,
+  deleteChannelMessage,
   rtlIsolate,
   MIN_CLOSE_HOURS,
   MAX_CLOSE_HOURS,
@@ -17,11 +18,13 @@ import type { PollSpec } from '../types';
 function fakeBot(overrides: {
   sendMessage?: ReturnType<typeof vi.fn>;
   sendPoll?: ReturnType<typeof vi.fn>;
+  deleteMessage?: ReturnType<typeof vi.fn>;
 }) {
   return {
     api: {
       sendMessage: overrides.sendMessage ?? vi.fn().mockResolvedValue({ message_id: 1 }),
       sendPoll: overrides.sendPoll ?? vi.fn().mockResolvedValue({ message_id: 2 }),
+      deleteMessage: overrides.deleteMessage ?? vi.fn().mockResolvedValue(true),
     },
   } as unknown as Bot<Context>;
 }
@@ -157,5 +160,36 @@ describe('sendPollToChannel', () => {
     const sendPoll = vi.fn().mockRejectedValue(new Error('429 too many requests'));
     const bot = fakeBot({ sendPoll });
     await expect(sendPollToChannel(bot, base)).resolves.toBeNull();
+  });
+});
+
+describe('deleteChannelMessage', () => {
+  it('calls bot.api.deleteMessage with the configured channel id and the message id', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const bot = fakeBot({ deleteMessage });
+    const ok = await deleteChannelMessage(bot, 555, { scheduleName: 'morning_azkar' });
+    expect(ok).toBe(true);
+    expect(deleteMessage).toHaveBeenCalledTimes(1);
+    const [chatId, messageId] = deleteMessage.mock.calls[0];
+    // vitest.config.ts injects CHANNEL_CHAT_ID="@test_channel".
+    expect(chatId).toBe('@test_channel');
+    expect(messageId).toBe(555);
+  });
+
+  it('returns false (does not throw) when Telegram rejects the delete', async () => {
+    // The most common cause: admin already deleted that message by hand.
+    const deleteMessage = vi
+      .fn()
+      .mockRejectedValue(new Error('400 Bad Request: message to delete not found'));
+    const bot = fakeBot({ deleteMessage });
+    await expect(deleteChannelMessage(bot, 999, { scheduleName: 'evening_azkar' })).resolves.toBe(
+      false,
+    );
+  });
+
+  it('returns false on a transient network error without bubbling up', async () => {
+    const deleteMessage = vi.fn().mockRejectedValue(new Error('ETIMEDOUT'));
+    const bot = fakeBot({ deleteMessage });
+    await expect(deleteChannelMessage(bot, 1)).resolves.toBe(false);
   });
 });

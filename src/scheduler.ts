@@ -3,9 +3,10 @@ import type { Bot, Context } from 'grammy';
 import { schedules } from './schedules';
 import type { ScheduleDef } from './types';
 import { pickContent } from './lib/pick';
-import { postToChannel, sendPollToChannel } from './lib/post';
+import { postToChannel, sendPollToChannel, deleteChannelMessage } from './lib/post';
 import { logger } from './lib/logger';
 import { config } from './config';
+import { getLastMessageId, setLastMessageId } from './lib/state';
 
 const tasks: ScheduledTask[] = [];
 
@@ -13,8 +14,33 @@ const tasks: ScheduledTask[] = [];
  * Run one schedule definition and return the resulting message_id (or
  * null if nothing was posted). Dispatches on `kind`:
  *
- *   - 'message' → pick content (fixed or random) and post as text.
- *   - 'poll'    → send the anonymous self-review poll.
+ *   - 'message' → pick content, post, then delete the previous copy of
+ *                 this schedule (replace-on-next-fire; see below).
+ *   - 'poll'    → send the anonymous self-review poll. Polls are NEVER
+ *                 tracked or deleted: the poll IS the alive, variable
+ *                 thing in the channel, and its own close_date already
+ *                 ends voting at the right time.
+ *
+ * Replace-on-next-fire
+ * ────────────────────
+ * Azkar repeat verbatim every day; keeping a year of identical copies
+ * would turn the channel into noise (and bury the poll for new joiners
+ * who see the full history). So a message schedule keeps exactly one
+ * live copy: post the new one, then delete the previous one.
+ *
+ * Order matters: post FIRST, then delete. Never the other way around —
+ * a network blip between "delete old" and "post new" would leave the
+ * channel temporarily empty for that schedule. Post-then-delete means
+ * the channel always shows *something* for this schedule.
+ *
+ * Failed posts leave state untouched, so the next fire will still try
+ * to clean up the same previous id. Failed deletes are logged as warn
+ * and skipped — see `deleteChannelMessage` for why that is benign.
+ *
+ * Any message NOT posted via this code path (your manual welcome /
+ * pinned intro, polls, other people's messages) is never tracked and
+ * therefore never deleted. The discriminated union makes "delete only
+ * the kinds we track" fall out for free, no allowlist needed.
  *
  * Exported so `/admin_run` fires the exact same code path manually.
  */
@@ -28,7 +54,23 @@ export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<
     logger.warn('Schedule has no content to post, skipping', { name: def.name });
     return null;
   }
-  return postToChannel(bot, text, { scheduleName: def.name });
+
+  const newId = await postToChannel(bot, text, { scheduleName: def.name });
+  if (newId === null) {
+    // Post failed. Keep the previous id intact so the next fire can
+    // still attempt the cleanup it would have done today.
+    return null;
+  }
+
+  const previousId = getLastMessageId(def.name);
+  await setLastMessageId(def.name, newId);
+
+  if (previousId !== undefined && previousId !== newId) {
+    // Best-effort. Failure is logged and swallowed — see deleteChannelMessage.
+    await deleteChannelMessage(bot, previousId, { scheduleName: def.name });
+  }
+
+  return newId;
 }
 
 /**

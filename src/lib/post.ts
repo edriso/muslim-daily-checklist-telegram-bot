@@ -36,6 +36,55 @@ export async function postToChannel(
   }
 }
 
+/**
+ * Delete one previously-posted message from the channel.
+ *
+ * Used by the replace-on-next-fire flow in `runSchedule`: when a message
+ * schedule fires for the Nth time, the new copy is posted first and then
+ * the (N-1)th message id is deleted, so the channel keeps exactly one
+ * live copy per schedule and never accumulates dupes of repeating azkar.
+ *
+ * Notes / why no throws
+ * ─────────────────────
+ * Failures here are *non-fatal by design*. The most common cause is "the
+ * admin already deleted that message manually" — Telegram returns 400,
+ * we log warn, and move on. A transient network error is the same: a
+ * leaked old message is purely cosmetic and self-bounded.
+ *
+ * Admin right required
+ * ────────────────────
+ * In a channel the bot needs the `can_delete_messages` admin right —
+ * note this is in addition to "Post messages". With it, the 48-hour
+ * deleteMessage cap does not apply, so the bot can still delete a
+ * weekly schedule's previous post 7 days later (e.g. Friday sunnah).
+ * See CLAUDE.md and DEPLOY.md.
+ *
+ * Returns true on success, false on any failure (logged, not thrown).
+ */
+export async function deleteChannelMessage(
+  bot: Bot<Context>,
+  messageId: number,
+  meta: { scheduleName?: string } = {},
+): Promise<boolean> {
+  try {
+    await bot.api.deleteMessage(config.channelChatId, messageId);
+    logger.info('Deleted previous channel message', {
+      scheduleName: meta.scheduleName,
+      messageId,
+    });
+    return true;
+  } catch (err) {
+    // warn (not error): a missing previous message is the routine case
+    // when an admin tidied the channel by hand. Don't shout for it.
+    logger.warn('Failed to delete previous channel message', {
+      scheduleName: meta.scheduleName,
+      messageId,
+      error: String(err),
+    });
+    return false;
+  }
+}
+
 /** Telegram's allowed poll auto-close window, expressed in hours. */
 export const MIN_CLOSE_HOURS = 5 / 3600; // 5 seconds
 export const MAX_CLOSE_HOURS = 2_628_000 / 3600; // ~30.4 days

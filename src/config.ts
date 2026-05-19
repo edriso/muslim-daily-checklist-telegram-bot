@@ -60,5 +60,11 @@ export const config = Object.freeze({
   adminTelegramId: optionalBigInt(process.env.ADMIN_TELEGRAM_ID),
   // Timezone for every cron schedule in src/schedules.ts. Defaults to UTC.
   timezone: process.env.TZ_NAME?.trim() || 'UTC',
+  // Tiny JSON sidecar that remembers the last message_id we posted per
+  // message-schedule, so the replace-on-next-fire delete survives a
+  // restart. Not a database — a single pointer file, like .env. Losing
+  // it just means each schedule leaks one stale message until the next
+  // cycle. See src/lib/state.ts.
+  stateFilePath: process.env.STATE_FILE?.trim() || './data/last-message-ids.json',
   isDev: process.env.NODE_ENV !== 'production',
 });

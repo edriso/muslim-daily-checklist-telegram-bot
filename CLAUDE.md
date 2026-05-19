@@ -2,11 +2,16 @@
 
 ## What this is
 
-A no-database Telegram bot that posts daily Islamic reminders to one
+A near-zero-state Telegram bot that posts daily Islamic reminders to one
 channel and runs a nightly **anonymous** self-review poll. The poll is
 anonymous + multiple-answer on purpose: Telegram aggregates the votes
 and shows percentages to everyone, nobody (including this bot) learns
 who voted. That delivers community motivation with no riya and no DB.
+
+Repeating reminders (azkar) auto-replace each other — the channel keeps
+one live copy per schedule, not a year of identical dupes. Polls and
+any human-posted message (your welcome / pinned intro) are never
+touched. See the "Replace-on-next-fire" design choice below.
 
 ## Folder layout
 
@@ -21,8 +26,9 @@ muslim-daily-checklist-telegram-bot-channel/
 │   ├── types.ts        ScheduleDef union + PollSpec (no import cycle)
 │   ├── health.ts       /health HTTP endpoint
 │   ├── content/        Arabic content modules + poll spec
-│   └── lib/            logger, pick (random/static), post (msg + poll)
+│   └── lib/            logger, pick, post (msg+poll+delete), state
 ├── scripts/send-test.ts  Manual dev sender (not imported by the app)
+├── data/               Tiny pointer file (gitignored). Auto-created.
 ├── docs/DEPLOY.md
 ├── package.json
 └── tsconfig.json
@@ -30,17 +36,33 @@ muslim-daily-checklist-telegram-bot-channel/
 
 ## Tech stack
 
-| Layer    | Choice                                  |
-| -------- | --------------------------------------- |
-| Bot      | TypeScript, Grammy, node-cron, Node 20+ |
-| Storage  | none                                    |
-| Packager | pnpm                                    |
+| Layer    | Choice                                                      |
+| -------- | ----------------------------------------------------------- |
+| Bot      | TypeScript, Grammy, node-cron, Node 20+                     |
+| Storage  | none, except one tiny JSON pointer file (see "No database") |
+| Packager | pnpm                                                        |
 
 ## Design choices
 
-- **No database.** State lives in source: cron in `schedules.ts`,
-  content in `content/`. Redeploy to change anything. This simplicity
-  is a feature: fewer parts → it runs untouched for years.
+- **No database.** Config and content live in source: cron in
+  `schedules.ts`, content in `content/`. Redeploy to change anything.
+  This simplicity is a feature: fewer parts → it runs untouched for
+  years. One deliberate carve-out: `src/lib/state.ts` keeps a tiny JSON
+  pointer file (`{ scheduleName: lastMessageId }`, default
+  `./data/last-message-ids.json`) so the replace-on-next-fire delete
+  survives a restart. It is NOT state-as-truth — no schema, no queries;
+  same conceptual weight as `.env`. Losing the file just means each
+  schedule leaks one stale message until the next cycle.
+- **Replace-on-next-fire (messages only).** Azkar repeat verbatim every
+  day; keeping a year of identical copies would turn the channel into
+  noise and bury the poll for new joiners (who see full history). So a
+  `kind: 'message'` schedule posts the new copy, then deletes the
+  previous tracked one. Order is post-then-delete so the channel is
+  never empty mid-cycle. Polls (`kind: 'poll'`) and any message NOT
+  posted by this code path (your welcome / pinned intro, other admins)
+  are never tracked → never deleted. The discriminated union makes this
+  fall out for free, no allowlist needed. See `scheduler.ts` +
+  `lib/state.ts`.
 - **Anonymous poll, not per-user tracking.** Streaks/personal history
   would need a DB and a subscriber bot, and re-introduce showing-off
   (riya). The anonymous poll keeps motivation without either. Do not
@@ -95,6 +117,7 @@ Keep those notices in the files.
 | `CHANNEL_PUBLIC_URL` | no       | Public link for `/start` only; decoupled from sending             |
 | `ADMIN_TELEGRAM_ID`  | no       | Enables /admin\_\* commands                                       |
 | `TZ_NAME`            | no       | Cron timezone. Code default UTC; `.env.example` sets Africa/Cairo |
+| `STATE_FILE`         | no       | Pointer file path. Default `./data/last-message-ids.json`         |
 | `NODE_ENV`           | no       | `production` for hosted                                           |
 | `PORT`               | no       | /health server port (default 8080)                                |
 
@@ -107,8 +130,14 @@ no link.
 
 ## Common gotchas
 
-- The bot must be a channel admin with "Post messages" permission, or
-  `sendMessage`/`sendPoll` 403s.
+- The bot must be a channel admin with **two** rights granted:
+  - **"Post messages"** — without it `sendMessage`/`sendPoll` 403s.
+  - **"Delete messages"** (`can_delete_messages`) — without it the
+    replace-on-next-fire cleanup fails. This admin right also removes
+    Telegram's 48h `deleteMessage` cap, which matters because
+    `friday_sunnah` is weekly (its previous copy is 7 days old). The
+    failure is non-fatal (logged), so an unconfigured deploy still
+    posts; old copies just accumulate until the right is granted.
 - Invalid cron is validated at boot, logged, and that one schedule is
   skipped; the rest still run.
 - DST: node-cron silently drops a job whose wall-clock time does not
@@ -116,15 +145,23 @@ no link.
   the last Friday of April, so keep schedules at 02:00+ to be safe.
 - Tests load `config.ts` transitively; `vitest.config.ts` injects dummy
   env so they need no real token.
+- Ephemeral hosting (Heroku-style) wipes `data/` on every deploy. The
+  bot still works — it just degrades to "one stale copy per schedule
+  per deploy" until the next cycle. On hosts with a persistent disk
+  (Railway, VPS, Docker volume) cleanup is exact across restarts.
 
 ## Testing
 
 `pnpm test` runs fast unit tests with no network or database. They
 cover: schedule and Telegram poll constraints, `post.ts` success and
-failure mocks (including close_date clamping), `runSchedule` kind
-dispatch, `startScheduler` skipping an invalid cron, `pickContent`
-(blank and array handling), `channelUrlFrom`, and `resolvePort`. The
-count is intentionally not stated here so it never goes stale.
+failure mocks (including close_date clamping and `deleteChannelMessage`),
+`runSchedule` kind dispatch + replace-on-next-fire (first fire posts
+only, second fire posts then deletes the previous id, failed posts
+leave state, polls are never tracked), `lib/state.ts` (empty/corrupt
+file resilience, persist round-trip, parent-dir creation),
+`startScheduler` skipping an invalid cron, `pickContent` (blank and
+array handling), `channelUrlFrom`, and `resolvePort`. The count is
+intentionally not stated here so it never goes stale.
 
 `pnpm send-test` runs `scripts/send-test.ts`: a manual dev tool that
 posts every message + the poll to the channel once and exits. It needs
