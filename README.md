@@ -45,7 +45,7 @@ docs/DEPLOY.md    How to deploy
 | ------------------- | --------------- | --------------------------------------------------------- |
 | `morning_azkar`     | every day 05:30 | أذكار الصباح                                              |
 | `friday_sunnah`     | Friday 05:32    | سنن الجمعة: طهارة وزينة، تبكير، الكهف، الصلاة على النبي ﷺ |
-| `evening_azkar`     | every day 16:30 | أذكار المساء                                              |
+| `evening_azkar`     | every day 17:00 | أذكار المساء                                              |
 | `fasting_reminder`  | Sun & Wed 21:40 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها)             |
 | `night_review_poll` | every day 21:43 | Anonymous self-review **poll** (the deeds)                |
 | `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل               |
