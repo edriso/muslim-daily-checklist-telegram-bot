@@ -163,13 +163,16 @@ no link.
 `pnpm test` runs fast unit tests with no network or database. They
 cover: schedule and Telegram poll constraints, `post.ts` success and
 failure mocks (including close_date clamping and `deleteChannelMessage`),
-`runSchedule` kind dispatch + replace-on-next-fire (first fire posts
-only, second fire posts then deletes the previous id, failed posts
-leave state, polls are never tracked), `lib/state.ts` (empty/corrupt
-file resilience, persist round-trip, parent-dir creation),
-`startScheduler` skipping an invalid cron, `pickContent` (blank and
-array handling), `channelUrlFrom`, and `resolvePort`. The count is
-intentionally not stated here so it never goes stale.
+`runSchedule` kind dispatch + the `keepLast` ring buffer (first fire
+posts only, message-default-1 deletes previous on second fire, polls
+without `keepLast` are never tracked, `keepLast: 2` fills then evicts
+oldest on third fire, failed posts leave state, `night_review_poll` is
+wired as size-2), `lib/state.ts` (empty/corrupt file resilience,
+legacy single-number migration, array round-trip, clear-on-empty,
+parent-dir creation), `startScheduler` skipping an invalid cron,
+`pickContent` (blank and array handling), `channelUrlFrom`, and
+`resolvePort`. The count is intentionally not stated here so it never
+goes stale.
 
 `pnpm send-test` runs `scripts/send-test.ts`: a manual dev tool that
 posts every message + the poll to the channel once and exits. It needs
