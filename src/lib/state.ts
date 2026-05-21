@@ -3,35 +3,43 @@ import path from 'path';
 import { logger } from './logger';
 
 /**
- * Per-schedule "last message_id I posted" pointer store.
+ * Per-schedule "message_ids I posted (oldest → newest)" pointer store.
  *
  * Why this exists
  * ───────────────
- * `runSchedule` for `kind: 'message'` posts the new copy and then deletes
- * the previous one — the channel keeps exactly one live copy per schedule
- * and never accumulates dupes of repeating azkar. To delete "the previous
- * one" across a process restart we have to remember its message_id; with
- * only an in-memory map a redeploy would leak orphans.
+ * `runSchedule` keeps each tracked schedule's last `keepLast` posts live
+ * in the channel — after a fire, anything older than the cap (oldest
+ * first) is deleted from Telegram. Across a process restart we must
+ * remember those message_ids; an in-memory-only map would leak orphans
+ * on every redeploy.
  *
  * This file is the deliberate carve-out from the project's "no database"
  * principle. It is NOT a database: no schema, no migrations, no queries —
- * a single small JSON file holding `{ scheduleName: messageId }`. Same
- * conceptual weight as `.env`. The bot never depends on it for
- * correctness — it is a pointer, not state-as-truth. Lose the file and
- * the worst that happens is each schedule leaks one stale message until
- * the next cycle replaces it.
+ * a single small JSON file mapping `name → number[]` (the tracked
+ * message_ids, oldest first). Same conceptual weight as `.env`. The bot
+ * never depends on it for correctness — it is a pointer, not
+ * state-as-truth. Lose the file and the worst that happens is each
+ * schedule leaks a handful of stale messages until they age out of the
+ * ring buffer.
+ *
+ * File-shape compatibility
+ * ────────────────────────
+ * Earlier versions stored `{ name: number }` (a single id). The reader
+ * accepts BOTH shapes: a bare number is coerced into a length-1 array.
+ * That keeps redeploys safe — no migration script, no flag day.
  *
  * Failure model (matches the rest of the project: log + continue)
  * ──────────────────────────────────────────────────────────────
  *   - File missing on boot              → start empty, log info.
  *   - File present but unparseable      → start empty, log warn.
+ *   - A single entry is malformed       → drop just that entry.
  *   - Persist write fails               → log error, keep in-memory copy.
  *   - `initState` never called          → in-memory only; no disk.
  *
  * That last point lets unit tests use the module with no filesystem.
  */
 
-let state: Record<string, number> = {};
+let state: Record<string, number[]> = {};
 let filePath: string | null = null;
 
 /**
@@ -49,11 +57,8 @@ export async function initState(p: string): Promise<void> {
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-        // Defensive: only accept positive integer message ids. A bad value
-        // in the file must not poison memory.
-        if (typeof v === 'number' && Number.isInteger(v) && v > 0) {
-          state[k] = v;
-        }
+        const ids = coerceToIdArray(v);
+        if (ids.length > 0) state[k] = ids;
       }
     }
     logger.info('Loaded message-id state', {
@@ -73,15 +78,57 @@ export async function initState(p: string): Promise<void> {
   }
 }
 
-/** The last message_id we posted for this schedule, or undefined. */
-export function getLastMessageId(name: string): number | undefined {
-  return state[name];
+/**
+ * Defensive coercion: accept both the legacy `number` shape and the
+ * current `number[]` shape, and drop anything that is not a positive
+ * integer (0, negatives, floats, strings, null). A bad value in the file
+ * must not poison memory or be sent to Telegram as a delete id.
+ */
+function coerceToIdArray(v: unknown): number[] {
+  if (typeof v === 'number') {
+    return isValidId(v) ? [v] : [];
+  }
+  if (Array.isArray(v)) {
+    return v.filter(isValidId);
+  }
+  return [];
 }
 
-/** Record the new message_id and persist (best-effort). */
-export async function setLastMessageId(name: string, id: number): Promise<void> {
-  state[name] = id;
+function isValidId(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n > 0;
+}
+
+/** The tracked message_ids for this schedule (oldest first), or `[]`. */
+export function getMessageIds(name: string): number[] {
+  return state[name] ? [...state[name]] : [];
+}
+
+/** Replace the tracked ids and persist (best-effort). Empty array clears. */
+export async function setMessageIds(name: string, ids: number[]): Promise<void> {
+  if (ids.length === 0) {
+    delete state[name];
+  } else {
+    state[name] = [...ids];
+  }
   await persist();
+}
+
+/**
+ * Compatibility shim: the most recent (newest) tracked id for this
+ * schedule, or undefined. Pre-ring-buffer call sites use this.
+ */
+export function getLastMessageId(name: string): number | undefined {
+  const arr = state[name];
+  return arr && arr.length > 0 ? arr[arr.length - 1] : undefined;
+}
+
+/**
+ * Compatibility shim: replace the tracked ids with a single id. Equivalent
+ * to `setMessageIds(name, [id])`. Used by tests that pre-date the ring
+ * buffer; production code should prefer `setMessageIds`.
+ */
+export async function setLastMessageId(name: string, id: number): Promise<void> {
+  await setMessageIds(name, [id]);
 }
 
 /**

@@ -96,7 +96,14 @@ export const schedules: ScheduleDef[] = [
     kind: 'poll',
     cron: '43 21 * * *',
     poll: nightReviewPoll,
-    description: 'استبيان مراجعة الليلة (مجهول)، كل يوم 9:43 م (قبل تذكير ما قبل النوم).',
+    // Ring buffer of size 2: the channel shows tonight's poll alongside
+    // yesterday's (already closed, still readable). The day-before's is
+    // deleted when tonight's fires. Yesterday's tally is the most useful
+    // historical signal ("how did the community do last night?"); going
+    // deeper just stacks identical-question polls and clutters scroll.
+    keepLast: 2,
+    description:
+      'استبيان مراجعة الليلة (مجهول)، كل يوم 9:43 م. تُحفَظ ليلتان (الحالية والسابقة) ثم تُحذَف الأقدم.',
   },
   {
     name: 'pre_sleep',

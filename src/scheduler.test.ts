@@ -3,7 +3,12 @@ import type { Bot, Context } from 'grammy';
 import { runSchedule } from './scheduler';
 import { findSchedule } from './schedules';
 import type { ScheduleDef } from './types';
-import { _resetForTests as resetState, getLastMessageId, setLastMessageId } from './lib/state';
+import {
+  _resetForTests as resetState,
+  getLastMessageId,
+  setLastMessageId,
+  getMessageIds,
+} from './lib/state';
 
 /**
  * runSchedule must dispatch on `kind`: messages go through sendMessage,
@@ -155,16 +160,23 @@ describe('runSchedule replace-on-next-fire (messages only)', () => {
     expect(getLastMessageId('morning_azkar')).toBe(701);
   });
 
-  it('polls are NEVER tracked, even after multiple fires', async () => {
+  it('a poll WITHOUT keepLast is never tracked (historic default)', async () => {
     const { bot, sendPoll, deleteMessage } = fakeBot();
-    const def = findSchedule('night_review_poll')!;
-    await runSchedule(bot, def);
-    await runSchedule(bot, def);
-    await runSchedule(bot, def);
+    // Synthetic poll def with no keepLast, to lock in the default-poll
+    // behavior independent of what schedules.ts happens to set today.
+    const untrackedPoll: ScheduleDef = {
+      name: 'untracked_poll',
+      kind: 'poll',
+      cron: '0 3 * * *',
+      poll: { question: 'q', options: ['a', 'b'] },
+    };
+    await runSchedule(bot, untrackedPoll);
+    await runSchedule(bot, untrackedPoll);
+    await runSchedule(bot, untrackedPoll);
 
     expect(sendPoll).toHaveBeenCalledTimes(3);
     expect(deleteMessage).not.toHaveBeenCalled();
-    expect(getLastMessageId('night_review_poll')).toBeUndefined();
+    expect(getLastMessageId('untracked_poll')).toBeUndefined();
   });
 
   it('different schedules track their pointers independently', async () => {
@@ -192,5 +204,105 @@ describe('runSchedule replace-on-next-fire (messages only)', () => {
     expect(deletedIds).toEqual([1, 2]);
     expect(getLastMessageId('morning_azkar')).toBe(3);
     expect(getLastMessageId('evening_azkar')).toBe(4);
+  });
+});
+
+describe('runSchedule ring buffer (keepLast > 1)', () => {
+  // A standalone poll def with keepLast=2 so this suite is independent
+  // of whatever the production schedules.ts happens to set.
+  const ringPoll: ScheduleDef = {
+    name: 'ring_poll',
+    kind: 'poll',
+    cron: '0 22 * * *',
+    poll: { question: 'q', options: ['a', 'b'] },
+    keepLast: 2,
+  };
+
+  it('first two fires fill the buffer; nothing is deleted yet', async () => {
+    const sendPoll = vi
+      .fn()
+      .mockResolvedValueOnce({ message_id: 1001 })
+      .mockResolvedValueOnce({ message_id: 1002 });
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const bot = {
+      api: { sendMessage: vi.fn(), sendPoll, deleteMessage },
+    } as unknown as Bot<Context>;
+
+    await runSchedule(bot, ringPoll);
+    await runSchedule(bot, ringPoll);
+
+    expect(sendPoll).toHaveBeenCalledTimes(2);
+    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(getMessageIds('ring_poll')).toEqual([1001, 1002]);
+  });
+
+  it('third fire posts, then deletes the oldest of the previous two', async () => {
+    const sendPoll = vi
+      .fn()
+      .mockResolvedValueOnce({ message_id: 1001 })
+      .mockResolvedValueOnce({ message_id: 1002 })
+      .mockResolvedValueOnce({ message_id: 1003 });
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const bot = {
+      api: { sendMessage: vi.fn(), sendPoll, deleteMessage },
+    } as unknown as Bot<Context>;
+
+    await runSchedule(bot, ringPoll);
+    await runSchedule(bot, ringPoll);
+    await runSchedule(bot, ringPoll);
+
+    expect(sendPoll).toHaveBeenCalledTimes(3);
+    expect(deleteMessage).toHaveBeenCalledTimes(1);
+    // The oldest (1001) is what gets cleaned up; 1002 + 1003 remain live.
+    expect(deleteMessage.mock.calls[0][1]).toBe(1001);
+    expect(getMessageIds('ring_poll')).toEqual([1002, 1003]);
+
+    // Post must happen before delete on this fire too.
+    const postOrder = sendPoll.mock.invocationCallOrder[2];
+    const deleteOrder = deleteMessage.mock.invocationCallOrder[0];
+    expect(postOrder < deleteOrder).toBe(true);
+  });
+
+  it('the real night_review_poll schedule is configured as a size-2 ring buffer', async () => {
+    const sendPoll = vi
+      .fn()
+      .mockResolvedValueOnce({ message_id: 9001 })
+      .mockResolvedValueOnce({ message_id: 9002 })
+      .mockResolvedValueOnce({ message_id: 9003 });
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const bot = {
+      api: { sendMessage: vi.fn(), sendPoll, deleteMessage },
+    } as unknown as Bot<Context>;
+    const def = findSchedule('night_review_poll')!;
+    expect(def.keepLast).toBe(2);
+
+    await runSchedule(bot, def);
+    await runSchedule(bot, def);
+    await runSchedule(bot, def);
+
+    expect(deleteMessage).toHaveBeenCalledTimes(1);
+    expect(deleteMessage.mock.calls[0][1]).toBe(9001);
+    expect(getMessageIds('night_review_poll')).toEqual([9002, 9003]);
+  });
+
+  it('a failed post on a ring-buffer fire leaves tracked ids untouched', async () => {
+    const sendPoll = vi
+      .fn()
+      .mockResolvedValueOnce({ message_id: 1001 })
+      .mockResolvedValueOnce({ message_id: 1002 })
+      .mockRejectedValueOnce(new Error('429'));
+    const deleteMessage = vi.fn().mockResolvedValue(true);
+    const bot = {
+      api: { sendMessage: vi.fn(), sendPoll, deleteMessage },
+    } as unknown as Bot<Context>;
+
+    await runSchedule(bot, ringPoll);
+    await runSchedule(bot, ringPoll);
+    await expect(runSchedule(bot, ringPoll)).resolves.toBeNull();
+
+    // No delete attempted on the failed fire — tomorrow we will still
+    // try to clean up 1001.
+    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(getMessageIds('ring_poll')).toEqual([1001, 1002]);
   });
 });

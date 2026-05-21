@@ -45,6 +45,21 @@ interface BaseSchedule {
   cron: string;
   /** Human note shown in `/admin_health`. Optional. */
   description?: string;
+  /**
+   * Ring-buffer size: how many of this schedule's past posts to keep
+   * visible in the channel. After every fire, posts beyond this count
+   * (oldest first) are deleted from Telegram.
+   *
+   *   - omit (undefined) ⇒
+   *       • for `kind: 'message'`: defaults to 1 (replace-on-next-fire).
+   *       • for `kind: 'poll'`   : defaults to 0 (never tracked, never
+   *         deleted — historic behavior).
+   *   - `0` ⇒ never track, never delete (one-off announcements).
+   *   - `1` ⇒ always exactly one live copy.
+   *   - `N > 1` ⇒ keep the latest N (e.g. `2` on the nightly poll shows
+   *     tonight's + yesterday's, drops the day-before's on fire).
+   */
+  keepLast?: number;
 }
 
 /** Posts a text message. `content` may be a fixed string or, if an

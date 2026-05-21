@@ -48,21 +48,29 @@ muslim-daily-checklist-telegram-bot-channel/
   `schedules.ts`, content in `content/`. Redeploy to change anything.
   This simplicity is a feature: fewer parts → it runs untouched for
   years. One deliberate carve-out: `src/lib/state.ts` keeps a tiny JSON
-  pointer file (`{ scheduleName: lastMessageId }`, default
-  `./data/last-message-ids.json`) so the replace-on-next-fire delete
+  pointer file (`{ scheduleName: messageIds[] }`, default
+  `./data/last-message-ids.json`) so the replace / ring-buffer delete
   survives a restart. It is NOT state-as-truth — no schema, no queries;
   same conceptual weight as `.env`. Losing the file just means each
-  schedule leaks one stale message until the next cycle.
-- **Replace-on-next-fire (messages only).** Azkar repeat verbatim every
-  day; keeping a year of identical copies would turn the channel into
-  noise and bury the poll for new joiners (who see full history). So a
-  `kind: 'message'` schedule posts the new copy, then deletes the
-  previous tracked one. Order is post-then-delete so the channel is
-  never empty mid-cycle. Polls (`kind: 'poll'`) and any message NOT
-  posted by this code path (your welcome / pinned intro, other admins)
-  are never tracked → never deleted. The discriminated union makes this
-  fall out for free, no allowlist needed. See `scheduler.ts` +
-  `lib/state.ts`.
+  schedule leaks a handful of stale messages until they age out of the
+  ring buffer. The reader accepts the pre-ring-buffer single-number
+  shape too, so old state files migrate transparently.
+- **Ring-buffer cleanup (per-schedule `keepLast`).** Repeating posts
+  would otherwise accumulate (a year of identical azkar; a year of
+  identical-question polls) and bury the welcome / pinned intro for
+  new joiners. So each schedule has an effective `keepLast`:
+  - messages default to **1** → exactly one live copy (the old
+    replace-on-next-fire rule, unchanged).
+  - polls default to **0** → never tracked, never deleted.
+  - `night_review_poll` overrides to **2** → channel always shows
+    tonight + last night, day-before-yesterday is deleted on tonight's
+    fire. Yesterday's tally is the most useful historic signal;
+    deeper just stacks identical-question polls.
+
+  Order is post-then-trim so the channel is never empty mid-cycle. Any
+  message NOT posted via this code path (your welcome / pinned intro,
+  other admins) is never tracked here, and therefore never deleted.
+  See `scheduler.ts#runSchedule` + `lib/state.ts`.
 - **Anonymous poll, not per-user tracking.** Streaks/personal history
   would need a DB and a subscriber bot, and re-introduce showing-off
   (riya). The anonymous poll keeps motivation without either. Do not

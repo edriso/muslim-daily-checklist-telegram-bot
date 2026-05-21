@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { initState, getLastMessageId, setLastMessageId, _resetForTests } from './state';
+import {
+  initState,
+  getLastMessageId,
+  setLastMessageId,
+  getMessageIds,
+  setMessageIds,
+  _resetForTests,
+} from './state';
 
 /**
  * The pointer store is a deliberate carve-out from the "no database"
@@ -35,10 +42,43 @@ describe('initState', () => {
 
   it('loads positive-integer ids from an existing file', async () => {
     await fs.mkdir(path.dirname(tmpFile), { recursive: true });
-    await fs.writeFile(tmpFile, JSON.stringify({ morning_azkar: 101, evening_azkar: 202 }), 'utf8');
+    await fs.writeFile(
+      tmpFile,
+      JSON.stringify({ morning_azkar: [101], evening_azkar: [202] }),
+      'utf8',
+    );
     await initState(tmpFile);
     expect(getLastMessageId('morning_azkar')).toBe(101);
     expect(getLastMessageId('evening_azkar')).toBe(202);
+  });
+
+  it('migrates legacy single-number values to length-1 arrays', async () => {
+    // Pre-ring-buffer state files stored `{ name: number }`. The reader
+    // must accept that shape so deploys do not need a flag day.
+    await fs.mkdir(path.dirname(tmpFile), { recursive: true });
+    await fs.writeFile(tmpFile, JSON.stringify({ morning_azkar: 101 }), 'utf8');
+    await initState(tmpFile);
+    expect(getMessageIds('morning_azkar')).toEqual([101]);
+    expect(getLastMessageId('morning_azkar')).toBe(101);
+  });
+
+  it('loads ring-buffer arrays as-is and drops bad entries inside them', async () => {
+    await fs.mkdir(path.dirname(tmpFile), { recursive: true });
+    await fs.writeFile(
+      tmpFile,
+      JSON.stringify({
+        good: [10, 20, 30],
+        mixed: [1, 0, -2, 3.5, 'four', null, 5],
+        empty: [],
+      }),
+      'utf8',
+    );
+    await initState(tmpFile);
+    expect(getMessageIds('good')).toEqual([10, 20, 30]);
+    // Only the two valid positive integers survive.
+    expect(getMessageIds('mixed')).toEqual([1, 5]);
+    // An empty array yields no entry at all.
+    expect(getMessageIds('empty')).toEqual([]);
   });
 
   it('drops non-integer / non-positive values defensively', async () => {
@@ -115,7 +155,26 @@ describe('setLastMessageId', () => {
     await setLastMessageId('x', 1);
 
     const raw = await fs.readFile(nested, 'utf8');
-    expect(JSON.parse(raw)).toEqual({ x: 1 });
+    expect(JSON.parse(raw)).toEqual({ x: [1] });
+  });
+
+  it('setMessageIds round-trips ring-buffer arrays through disk', async () => {
+    await initState(tmpFile);
+    await setMessageIds('night_review_poll', [501, 502]);
+    expect(getMessageIds('night_review_poll')).toEqual([501, 502]);
+
+    _resetForTests();
+    await initState(tmpFile);
+    expect(getMessageIds('night_review_poll')).toEqual([501, 502]);
+  });
+
+  it('setMessageIds with an empty array clears the entry', async () => {
+    await initState(tmpFile);
+    await setMessageIds('foo', [1, 2, 3]);
+    expect(getMessageIds('foo')).toEqual([1, 2, 3]);
+    await setMessageIds('foo', []);
+    expect(getMessageIds('foo')).toEqual([]);
+    expect(getLastMessageId('foo')).toBeUndefined();
   });
 
   it('without initState (pure in-memory) set/get still works and never touches disk', async () => {

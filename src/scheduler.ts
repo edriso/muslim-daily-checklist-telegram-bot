@@ -6,7 +6,7 @@ import { pickContent } from './lib/pick';
 import { postToChannel, sendPollToChannel, deleteChannelMessage } from './lib/post';
 import { logger } from './lib/logger';
 import { config } from './config';
-import { getLastMessageId, setLastMessageId } from './lib/state';
+import { getMessageIds, setMessageIds } from './lib/state';
 
 const tasks: ScheduledTask[] = [];
 
@@ -14,63 +14,92 @@ const tasks: ScheduledTask[] = [];
  * Run one schedule definition and return the resulting message_id (or
  * null if nothing was posted). Dispatches on `kind`:
  *
- *   - 'message' → pick content, post, then delete the previous copy of
- *                 this schedule (replace-on-next-fire; see below).
- *   - 'poll'    → send the anonymous self-review poll. Polls are NEVER
- *                 tracked or deleted: the poll IS the alive, variable
- *                 thing in the channel, and its own close_date already
- *                 ends voting at the right time.
+ *   - 'message' → pick content, post via sendMessage.
+ *   - 'poll'    → send the anonymous self-review poll via sendPoll.
  *
- * Replace-on-next-fire
- * ────────────────────
- * Azkar repeat verbatim every day; keeping a year of identical copies
- * would turn the channel into noise (and bury the poll for new joiners
- * who see the full history). So a message schedule keeps exactly one
- * live copy: post the new one, then delete the previous one.
+ * Ring buffer (replace-on-next-fire generalised)
+ * ──────────────────────────────────────────────
+ * Each schedule has an effective `keepLast` (see types.ts):
  *
- * Order matters: post FIRST, then delete. Never the other way around —
- * a network blip between "delete old" and "post new" would leave the
- * channel temporarily empty for that schedule. Post-then-delete means
- * the channel always shows *something* for this schedule.
+ *   message default = 1   → exactly one live copy (the old azkar rule).
+ *   poll default    = 0   → never track, never delete (historic rule).
+ *   N > 1           → keep the latest N (tonight + previous nights).
  *
- * Failed posts leave state untouched, so the next fire will still try
- * to clean up the same previous id. Failed deletes are logged as warn
- * and skipped — see `deleteChannelMessage` for why that is benign.
+ * After every successful post the new id is appended to that schedule's
+ * tracked list, then any ids beyond `keepLast` (oldest first) are
+ * deleted from Telegram. With `keepLast: 2` on the nightly poll, the
+ * channel shows tonight's + yesterday's at any moment, and the
+ * day-before-yesterday's gets cleaned up when tonight's fires.
  *
- * Any message NOT posted via this code path (your manual welcome /
- * pinned intro, polls, other people's messages) is never tracked and
- * therefore never deleted. The discriminated union makes "delete only
- * the kinds we track" fall out for free, no allowlist needed.
+ * Order matters: post FIRST, then trim. Never the other way around — a
+ * network blip between "delete old" and "post new" would briefly leave
+ * the channel empty for that schedule. Post-then-trim means the channel
+ * always shows *something* for this schedule.
+ *
+ * Failed posts leave state untouched, so the next fire will still try to
+ * clean up the same previous ids. Failed deletes still advance state
+ * (we did our best; a stale orphan is benign — see
+ * `deleteChannelMessage`).
+ *
+ * Any message NOT posted via this code path (manual welcome / pinned
+ * intro, other admins) is never tracked here and therefore never
+ * deleted. The state file's per-schedule keying makes this fall out for
+ * free, no allowlist needed.
  *
  * Exported so `/admin_run` fires the exact same code path manually.
  */
 export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
+  const keepLast = effectiveKeepLast(def);
+
+  const newId = await sendForKind(bot, def);
+  if (newId === null) {
+    // Post failed. Keep tracked ids intact so the next fire can still
+    // attempt the cleanup it would have done today.
+    return null;
+  }
+
+  if (keepLast === 0) {
+    // Not tracked — historic poll behavior, or an opt-out one-off.
+    return newId;
+  }
+
+  const previous = getMessageIds(def.name);
+  const next = [...previous, newId];
+  const toDelete = next.length > keepLast ? next.splice(0, next.length - keepLast) : [];
+  await setMessageIds(def.name, next);
+
+  for (const oldId of toDelete) {
+    if (oldId === newId) continue; // belt-and-suspenders; never delete what we just posted.
+    // Best-effort. Failure is logged and swallowed — see deleteChannelMessage.
+    await deleteChannelMessage(bot, oldId, { scheduleName: def.name });
+  }
+
+  return newId;
+}
+
+/**
+ * Resolve `def.keepLast` against the kind-default. Negative values are
+ * clamped to 0 (treated as "do not track") rather than throwing — a
+ * config typo must not break the cron tick.
+ */
+function effectiveKeepLast(def: ScheduleDef): number {
+  if (typeof def.keepLast === 'number' && Number.isInteger(def.keepLast) && def.keepLast >= 0) {
+    return def.keepLast;
+  }
+  return def.kind === 'message' ? 1 : 0;
+}
+
+/** Dispatch on kind. Returns the new message_id or null on failure. */
+async function sendForKind(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
   if (def.kind === 'poll') {
     return sendPollToChannel(bot, def.poll, { scheduleName: def.name });
   }
-
   const text = pickContent(def.content);
   if (!text) {
     logger.warn('Schedule has no content to post, skipping', { name: def.name });
     return null;
   }
-
-  const newId = await postToChannel(bot, text, { scheduleName: def.name });
-  if (newId === null) {
-    // Post failed. Keep the previous id intact so the next fire can
-    // still attempt the cleanup it would have done today.
-    return null;
-  }
-
-  const previousId = getLastMessageId(def.name);
-  await setLastMessageId(def.name, newId);
-
-  if (previousId !== undefined && previousId !== newId) {
-    // Best-effort. Failure is logged and swallowed — see deleteChannelMessage.
-    await deleteChannelMessage(bot, previousId, { scheduleName: def.name });
-  }
-
-  return newId;
+  return postToChannel(bot, text, { scheduleName: def.name });
 }
 
 /**
