@@ -116,6 +116,25 @@ describe('poll schedules', () => {
   });
 });
 
+describe('bedtime window order', () => {
+  // Guards the documented design: pre_sleep fires BEFORE night_review_poll,
+  // so the poll is the last message in the channel. A user who sees the
+  // gap «سورة المُلك وأذكار النوم» in the poll scrolls UP to the pre-sleep
+  // message above it and acts on the dhikr. See schedules.ts header.
+  function minutesFromTopOfDay(cronExpr: string): number {
+    const [m, h] = cronExpr.split(/\s+/).map(Number);
+    return h * 60 + m;
+  }
+
+  it('pre_sleep fires before night_review_poll on the same day', () => {
+    const presleep = findSchedule('pre_sleep');
+    const poll = findSchedule('night_review_poll');
+    expect(presleep, 'pre_sleep must exist').toBeDefined();
+    expect(poll, 'night_review_poll must exist').toBeDefined();
+    expect(minutesFromTopOfDay(presleep!.cron)).toBeLessThan(minutesFromTopOfDay(poll!.cron));
+  });
+});
+
 describe('findSchedule', () => {
   it('finds a schedule by name', () => {
     const first = schedules[0];

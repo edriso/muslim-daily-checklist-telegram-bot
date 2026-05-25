@@ -42,8 +42,10 @@
  *      (equivalent to: pnpm exec tsx scripts/send-test.ts)
  *
  * Sends in the order declared by `schedules.ts`, which already mirrors
- * a real day (morning → Friday Kahf → evening azkar → fasting → poll →
- * pre-sleep) so the preview ends on the azkar, not on the poll.
+ * a real day (morning → Friday Kahf → evening azkar → fasting →
+ * pre-sleep → poll) so the preview ends on the poll — the same final
+ * thing subscribers see, with «سورة المُلك وأذكار النوم» as its last
+ * option pointing back up to the pre-sleep message above.
  */
 import { Bot, type Context } from 'grammy';
 import { config } from '../src/config';
@@ -88,11 +90,9 @@ async function main() {
   // anyone scrolling past knows the messages below it are tests, not
   // real scheduled posts. Old banners pile up by design — delete by
   // hand when you're done.
-  const bannerId = await postToChannel(
-    bot,
-    '🧪 رسائل اختبار للبوت، يمكنك حذفها بعد المعاينة.',
-    { scheduleName: 'test-banner' },
-  );
+  const bannerId = await postToChannel(bot, '🧪 رسائل اختبار للبوت، يمكنك حذفها بعد المعاينة.', {
+    scheduleName: 'test-banner',
+  });
   if (bannerId === null) {
     console.error('Banner send failed — aborting. Check bot admin rights (Post messages).');
     process.exit(1);

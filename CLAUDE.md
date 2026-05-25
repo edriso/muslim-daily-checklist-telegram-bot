@@ -25,9 +25,11 @@ muslim-daily-checklist-telegram-bot-channel/
 │   ├── schedules.ts    THE EDIT POINT: the schedule list + findSchedule
 │   ├── types.ts        ScheduleDef union + PollSpec (no import cycle)
 │   ├── health.ts       /health HTTP endpoint
-│   ├── content/        Arabic content modules + poll spec
+│   ├── content/        Arabic content modules + poll spec + welcome.ts
 │   └── lib/            logger, pick, post (msg+poll+delete), state
-├── scripts/send-test.ts  Manual dev sender (not imported by the app)
+├── scripts/
+│   ├── send-test.ts       Manual dev sender (not imported by the app)
+│   └── post-welcome.ts    Manual welcome-message post/edit (not imported)
 ├── data/               Tiny pointer file (gitignored). Auto-created.
 ├── docs/DEPLOY.md
 ├── package.json
@@ -73,6 +75,7 @@ muslim-daily-checklist-telegram-bot-channel/
   message NOT posted via this code path (your welcome / pinned intro,
   other admins) is never tracked here, and therefore never deleted.
   See `scheduler.ts#runSchedule` + `lib/state.ts`.
+
 - **Anonymous poll, not per-user tracking.** Streaks/personal history
   would need a DB and a subscriber bot, and re-introduce showing-off
   (riya). The anonymous poll keeps motivation without either. Do not
@@ -191,29 +194,36 @@ goes stale.
 fires every schedule once via the same `runSchedule` the cron loop
 uses, then exits. Four properties matter:
 
-  * It calls `bot.api.getChat(channelChatId)` as a preflight before
-    posting anything. A bad token, wrong chat id, or invite-link slug
-    pasted as the id fails fast with one clean diagnostic instead of
-    N identical 400s scrolling past.
-  * Each session opens with a short Arabic banner posted directly via
-    `postToChannel` (NOT through `runSchedule`), so it is never tracked
-    in the state file and never auto-deleted. Banners therefore
-    accumulate across runs by design — they mark each dev preview
-    session in the channel scrollback. Delete old banners by hand.
-  * After the banner the schedules go through `runSchedule`, so
-    re-running it auto-cleans the previous run's azkar/poll posts.
-    Per-machine: the pointer file is local, so a `send-test` from a
-    dev laptop and a real prod cron fire do not see each other's
-    posts.
-  * Bail-on-first-failure: if the banner fails to send, OR if the
-    first schedule fire fails, the script exits early instead of
-    stacking N errors. After the first successful schedule fire it
-    keeps going even if later schedules fail (likely content-specific).
+- It calls `bot.api.getChat(channelChatId)` as a preflight before
+  posting anything. A bad token, wrong chat id, or invite-link slug
+  pasted as the id fails fast with one clean diagnostic instead of
+  N identical 400s scrolling past.
+- Each session opens with a short Arabic banner posted directly via
+  `postToChannel` (NOT through `runSchedule`), so it is never tracked
+  in the state file and never auto-deleted. Banners therefore
+  accumulate across runs by design — they mark each dev preview
+  session in the channel scrollback. Delete old banners by hand.
+- After the banner the schedules go through `runSchedule`, so
+  re-running it auto-cleans the previous run's azkar/poll posts.
+  Per-machine: the pointer file is local, so a `send-test` from a
+  dev laptop and a real prod cron fire do not see each other's
+  posts.
+- Bail-on-first-failure: if the banner fails to send, OR if the
+  first schedule fire fails, the script exits early instead of
+  stacking N errors. After the first successful schedule fire it
+  keeps going even if later schedules fail (likely content-specific).
 
 Needs `.env` (BOT_TOKEN + CHANNEL_CHAT_ID) and the bot to be a
 channel admin with "Post messages" + "Delete messages". Does NOT
 require `ADMIN_TELEGRAM_ID` (unlike `/admin_run`). Not imported by
 the app; safe to keep in the repo.
+
+`pnpm post-welcome` runs `scripts/post-welcome.ts`: posts (no args) or
+edits-in-place (`pnpm post-welcome <message_id>`) the pinned welcome
+message single-sourced in `src/content/welcome.ts`. Edit-in-place is
+the normal mode: the pin stays, no notification fires. Outside the
+cron loop and outside the ring-buffer state file on purpose — the
+welcome is read once and pinned, not re-posted daily.
 
 ## Git
 

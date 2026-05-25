@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "send-test": "tsx scripts/send-test.ts",
+    "post-welcome": "tsx scripts/post-welcome.ts",
     "format": "prettier --write \"**/*.{ts,js,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md,yml,yaml}\""
   },

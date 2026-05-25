@@ -32,10 +32,11 @@ src/
   scheduler.ts    Registers schedules with cron, runs them
   bot.ts          Grammy setup: /start + admin commands
   health.ts       Tiny /health HTTP endpoint for uptime checks
-  content/        The Arabic texts + the poll definition
+  content/        The Arabic texts + the poll + the welcome message
   lib/            logger, pick (random/fixed), post (send msg + poll)
 scripts/
-  send-test.ts    Dev tool: post everything once to preview it
+  send-test.ts    Dev tool: post every schedule once to preview it
+  post-welcome.ts Dev tool: post or edit the pinned welcome message
 docs/DEPLOY.md    How to deploy
 ```
 
@@ -47,8 +48,8 @@ docs/DEPLOY.md    How to deploy
 | `friday_sunnah`     | Friday 05:32    | سنن الجمعة: طهارة وزينة، تبكير، الكهف، الصلاة على النبي ﷺ |
 | `evening_azkar`     | every day 17:00 | أذكار المساء                                              |
 | `fasting_reminder`  | Sun & Wed 21:40 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها)             |
-| `night_review_poll` | every day 21:43 | Anonymous self-review **poll** (the deeds)                |
-| `pre_sleep`         | every day 21:45 | سورة المُلك + أذكار النوم + نيّة قيام الليل               |
+| `pre_sleep`         | every day 21:43 | سورة المُلك + أذكار النوم + نيّة قيام الليل               |
+| `night_review_poll` | every day 21:45 | Anonymous self-review **poll** (the deeds)                |
 
 Posts are deliberately grouped into one tight window so they arrive
 together as a single "session" instead of scattered buzzes. What makes
@@ -57,10 +58,13 @@ not the message count. The result is **at most 3 moments a day**:
 
 1. A morning one (the azkar, plus Surah Al-Kahf on Friday).
 2. A late-afternoon one (the evening azkar).
-3. A bedtime one (the poll, then the pre-sleep reminder, plus the
+3. A bedtime one (the pre-sleep reminder, then the poll, plus the
    fasting reminder on Sunday and Wednesday).
 
-The bedtime group ends on the azkar, not on the poll.
+The poll fires last on purpose: its last option is «سورة المُلك وأذكار
+النوم», so a member who sees the gap in their checklist scrolls up to
+the pre-sleep message above it and acts on the dhikr there. The poll
+is a self-review nudge toward the azkar, not a competitor.
 
 ## ⚠️ Before going live: have the content reviewed
 
@@ -167,15 +171,30 @@ one is that the bot is not a channel admin with "Post messages".
 ## npm scripts
 
 ```bash
-pnpm dev           # run in watch mode (auto-restart on save)
-pnpm send-test     # dev: post every message + the poll once, then exit
-pnpm build         # type-check and compile to dist/
-pnpm start         # run the compiled bot (production)
-pnpm test          # run the test suite (fast, no network or database)
-pnpm typecheck     # type-check only, no output
-pnpm format        # auto-format with Prettier
-pnpm format:check  # verify formatting (used before commits)
+pnpm dev             # run in watch mode (auto-restart on save)
+pnpm send-test       # dev: post every message + the poll once, then exit
+pnpm post-welcome    # dev: post or edit-in-place the pinned welcome message
+pnpm build           # type-check and compile to dist/
+pnpm start           # run the compiled bot (production)
+pnpm test            # run the test suite (fast, no network or database)
+pnpm typecheck       # type-check only, no output
+pnpm format          # auto-format with Prettier
+pnpm format:check    # verify formatting (used before commits)
 ```
+
+## Channel welcome (pinned intro)
+
+The welcome message new joiners see lives in `src/content/welcome.ts`.
+It is **not** posted by the bot's cron loop — you push it manually:
+
+```bash
+pnpm post-welcome                # first time: posts new, prints message_id
+pnpm post-welcome <message_id>   # later: edits in place; pin + notification stay
+```
+
+After the first post, pin the message in the channel by hand
+(message → ⋮ → Pin). Remember the printed id so future edits can use
+the second form and not re-fire a notification or break the pin.
 
 ## Deploying
 

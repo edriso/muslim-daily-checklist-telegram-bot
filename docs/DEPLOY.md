@@ -94,6 +94,24 @@ hand to confirm the channel receives it, e.g.:
 3. Start: `pnpm start`
 4. Set the env vars listed above. Railway provides `PORT` automatically.
 
+## Welcome message (one-time setup)
+
+The pinned welcome new joiners see is single-sourced in
+`src/content/welcome.ts` and pushed manually:
+
+```bash
+pnpm post-welcome                # first time: posts new, prints message_id
+pnpm post-welcome <message_id>   # later: edits in place (pin stays, no ping)
+```
+
+After the first post, pin the message in Telegram by hand (channel →
+message → ⋮ → Pin). Note the printed id; use it for every future edit
+so the pin and the notification etiquette are preserved.
+
+The welcome is intentionally outside the cron loop: it is read once and
+pinned, not re-posted daily, and is therefore never tracked or deleted
+by the ring-buffer cleanup that handles the daily azkar.
+
 ## Editing schedules
 
 All rules live in `src/schedules.ts`. Each entry is `{ name, kind, cron,
