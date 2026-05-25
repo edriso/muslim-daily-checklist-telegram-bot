@@ -109,6 +109,16 @@ ayah it is marked as a du'a, not a Prophetic (marfūʿ) text. Before any
 real launch the content must be reviewed once by a trusted طالب علم.
 Keep those notices in the files.
 
+The three azkar files (`morningAzkar.ts`, `eveningAzkar.ts`,
+`preSleep.ts`) mirror حصن المسلم's chapter order item-for-item, with
+dhikr text taken verbatim from hisnmuslim.com. Any item added outside
+Hisn's chapter (e.g. سورة الكافرون قبل النوم) is marked as «توسعة
+مقصودة» in that file's takhreej header, with its independent isnad
+and grading. Telegram's hard 4096-char limit per message applies: when
+adding items, check each file's reported margin first — `morningAzkar`
+already runs near the limit, so any growth requires a trim elsewhere
+in the same file or a schedule split.
+
 ## How to change what it posts
 
 1. Message text → edit the file in `src/content/`.

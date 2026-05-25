@@ -32,18 +32,21 @@ export type { ScheduleDef } from './types';
  * the arrival order is deterministic) and read as a single "session":
  *
  *   • Friday morning  → morning azkar + Friday sunan (one morning ping)
- *   • Every night      → poll + pre-sleep          (one bedtime ping)
- *   • Sun/Wed night    → + fasting reminder        (folded into the
- *                                                   same bedtime ping)
+ *   • Every night      → pre-sleep + poll           (one bedtime ping)
+ *   • Sun/Wed night    → + fasting reminder         (folded into the
+ *                                                    same bedtime ping)
  *
  * That is ≤3 interruption moments/day (morning, late afternoon, night)
  * instead of 4–5 scattered ones, with no merged content and no
  * branching logic — a Telegram poll cannot live inside a text message,
  * and conditional content would break the static-content design.
  *
- * Within the bedtime window the spiritual act comes LAST: fasting
- * reminder → poll → pre-sleep, so the final thing before sleep is the
- * azkar (Mulk, sleep adhkar, qiyam niyyah), not a UI poll.
+ * Within the bedtime window the poll fires LAST: fasting → pre-sleep
+ * → poll. The poll's options include «سورة المُلك وأذكار النوم» as
+ * the last item, so a user who opens the channel sees the poll at the
+ * bottom (newest), notices the gap, and scrolls UP to the pre-sleep
+ * message to read/act on the dhikr. The poll is a self-review
+ * checklist that surfaces the azkar, not a competitor to them.
  */
 export const schedules: ScheduleDef[] = [
   {
@@ -92,9 +95,17 @@ export const schedules: ScheduleDef[] = [
     description: 'تذكير صيام الإثنين/الخميس، مساء الأحد والأربعاء 9:40 م (مع مجموعة ما قبل النوم).',
   },
   {
+    name: 'pre_sleep',
+    kind: 'message',
+    cron: '43 21 * * *',
+    content: preSleepReminder,
+    description:
+      'سورة المُلك وأذكار النوم ونيّة القيام، كل يوم 9:43 م (قبل استبيان المراجعة بدقيقتين).',
+  },
+  {
     name: 'night_review_poll',
     kind: 'poll',
-    cron: '43 21 * * *',
+    cron: '45 21 * * *',
     poll: nightReviewPoll,
     // Replace-on-next-fire (same rule as messages): when tonight's poll
     // fires, last night's is deleted. Polls default to 0 (untracked), so
@@ -103,14 +114,7 @@ export const schedules: ScheduleDef[] = [
     // questions burying the welcome / pinned intro for new joiners.
     keepLast: 1,
     description:
-      'استبيان مراجعة الليلة (مجهول)، كل يوم 9:43 م. تُحذَف نسخة الليلة السابقة عند نشر الجديدة.',
-  },
-  {
-    name: 'pre_sleep',
-    kind: 'message',
-    cron: '45 21 * * *',
-    content: preSleepReminder,
-    description: 'سورة المُلك وأذكار النوم ونيّة القيام، كل يوم 9:45 م (آخر رسالة قبل النوم).',
+      'استبيان مراجعة الليلة (مجهول)، كل يوم 9:45 م — آخر منشور في النافذة، يدلّ المُتَخَلِّف عن ذكرٍ إلى رسالة ما قبل النوم فوقَه. تُحذَف نسخة الليلة السابقة عند نشر الجديدة.',
   },
 ];
 
