@@ -4,11 +4,18 @@
  * It fires every schedule once via the SAME `runSchedule` the cron loop
  * uses, then exits. So:
  *
- *   - You see in the channel exactly what subscribers see — no banner,
- *     no test wrapper, no formatting drift.
- *   - The same delete-previous cleanup runs too. Run `pnpm send-test`
- *     twice and the second run wipes the first run's posts before
- *     posting fresh ones — no manual cleanup needed.
+ *   - You see in the channel exactly what subscribers see for each
+ *     schedule (no wrapper, no formatting drift). Each session is
+ *     introduced by a short Arabic banner so anyone scrolling the
+ *     channel knows the messages below it are dev previews, not real
+ *     scheduled posts.
+ *   - The delete-previous cleanup runs for the schedules: re-running
+ *     `pnpm send-test` wipes the previous run's azkar/poll posts
+ *     before posting fresh ones, so no manual cleanup is needed for
+ *     them. The BANNER, however, is sent outside that tracking on
+ *     purpose, so each test session leaves its own banner in the
+ *     channel as a visible marker. Delete old banners by hand when
+ *     you're done reviewing.
  *
  * One gotcha — cleanup is per-machine, not per-channel:
  *   The bot tracks what to delete in a small local file
@@ -43,6 +50,7 @@ import { config } from '../src/config';
 import { runSchedule } from '../src/scheduler';
 import { schedules } from '../src/schedules';
 import { initState } from '../src/lib/state';
+import { postToChannel } from '../src/lib/post';
 
 const bot = new Bot<Context>(config.botToken);
 
@@ -73,11 +81,31 @@ async function main() {
 
   console.log('Sending test content to', config.channelChatId);
 
-  // Bail-on-first-failure. If the FIRST fire fails (post-rights missing,
-  // network down, etc.) the rest will too — abort early instead of
-  // spamming N failures. After the first success the channel is proven
-  // postable, so later per-schedule failures are reported but don't
-  // halt — they're likely content-specific.
+  // Session banner. Sent directly via postToChannel (NOT through
+  // runSchedule), so it has no schedule name in the state file and
+  // won't be auto-deleted on re-runs. The banner is meant to persist:
+  // it marks each dev preview session in the channel scrollback so
+  // anyone scrolling past knows the messages below it are tests, not
+  // real scheduled posts. Old banners pile up by design — delete by
+  // hand when you're done.
+  const bannerId = await postToChannel(
+    bot,
+    '🧪 رسائل اختبار للبوت، يمكنك حذفها بعد المعاينة.',
+    { scheduleName: 'test-banner' },
+  );
+  if (bannerId === null) {
+    console.error('Banner send failed — aborting. Check bot admin rights (Post messages).');
+    process.exit(1);
+  }
+  console.log(`  test-banner: message ${bannerId}`);
+  await sleep(1500);
+
+  // Bail-on-first-failure for the real schedules too. If the first
+  // schedule fire fails despite the banner having gone through
+  // (something content-specific, or a sudden rate-limit), halt instead
+  // of spamming N failures. After the first success the channel is
+  // proven postable so later per-schedule failures are reported but
+  // don't halt.
   let postedAtLeastOne = false;
   for (const def of schedules) {
     const id = await runSchedule(bot, def);

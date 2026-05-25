@@ -108,12 +108,17 @@ pnpm send-test
   require `ADMIN_TELEGRAM_ID` to be set, unlike `/admin_run`.
 - Runs a quick preflight check first (one Telegram API call, no
   posting). If your token or channel id is wrong, it exits with one
-  clean error instead of spamming six failed sends.
-- Reuses the exact production send code, so what you see is what
-  subscribers will see. No test banner, no wrapper.
-- Re-running it auto-cleans the previous run's posts before posting
+  clean error instead of spamming several failed sends.
+- Starts each session with a short Arabic banner so anyone reading
+  the channel knows the messages below it are dev previews, not real
+  scheduled posts. The banner is intentionally not auto-cleaned, so
+  each test session leaves its own marker in the scrollback. Delete
+  old banners by hand when you are done reviewing.
+- For the schedule posts themselves it reuses the exact production
+  send code, so what you see is what subscribers will see. Re-running
+  it auto-cleans the previous run's azkar/poll posts before posting
   fresh ones (same delete-previous logic the real scheduler uses), so
-  there is no manual cleanup, as long as you re-run from the same
+  no manual cleanup for those, as long as you re-run from the same
   machine. The pointer file is local: a test post sent from your
   laptop will not be cleaned up by prod's later real cron fire, and
   vice versa.
