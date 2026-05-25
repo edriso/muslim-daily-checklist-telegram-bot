@@ -80,7 +80,8 @@ pnpm install
 cp .env.example .env
 # Edit .env and set at least:
 #   BOT_TOKEN          from @BotFather
-#   CHANNEL_CHAT_ID    numeric -100... (recommended) or @yourchannel
+#   CHANNEL_CHAT_ID    numeric -100... (see .env.example for two easy
+#                      ways to find it) or @yourchannel
 # Optional:
 #   CHANNEL_PUBLIC_URL https://t.me/yourchannel  (tap-through link in /start)
 #   ADMIN_TELEGRAM_ID  your numeric Telegram id (enables admin commands)
@@ -103,12 +104,19 @@ look at it in the channel:
 pnpm send-test
 ```
 
-- Needs the same `.env` (BOT_TOKEN + CHANNEL_CHAT_ID). It does **not**
-  require admin rights on the bot, unlike `/admin_run`.
-- It reuses the exact production send code, so what you see is what
-  subscribers get.
-- It prefixes a "🧪 test" banner. **Delete the test posts from the
-  channel afterwards**, they are not real scheduled content.
+- Needs the same `.env` (BOT_TOKEN + CHANNEL_CHAT_ID). It does not
+  require `ADMIN_TELEGRAM_ID` to be set, unlike `/admin_run`.
+- Runs a quick preflight check first (one Telegram API call, no
+  posting). If your token or channel id is wrong, it exits with one
+  clean error instead of spamming six failed sends.
+- Reuses the exact production send code, so what you see is what
+  subscribers will see. No test banner, no wrapper.
+- Re-running it auto-cleans the previous run's posts before posting
+  fresh ones (same delete-previous logic the real scheduler uses), so
+  there is no manual cleanup, as long as you re-run from the same
+  machine. The pointer file is local: a test post sent from your
+  laptop will not be cleaned up by prod's later real cron fire, and
+  vice versa.
 
 ## Editing what it posts
 

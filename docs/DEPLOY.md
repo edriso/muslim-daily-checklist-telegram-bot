@@ -43,15 +43,32 @@ changes, so posting can never break if the channel username is renamed.
 
 ## Finding `CHANNEL_CHAT_ID`
 
-Get the numeric id and use it for both public and private channels:
-forward any channel message to @username_to_id_bot and it returns the
-`-100...` id. (A public `@handle` also works, but the numeric id is the
-safer production choice because it survives a username change.)
+Use the numeric `-100...` id. It works for both public and private
+channels and survives any username rename. Two reliable ways to get it
+without any third-party bot:
 
-For a public channel you also want the tap-through link in `/start`,
-set `CHANNEL_PUBLIC_URL` to the share link, for example
-`CHANNEL_PUBLIC_URL="https://t.me/yourchannel"`. Leave it empty for a
-private channel.
+1. **Telegram Web.** Open https://web.telegram.org/k/ and click your
+   channel. The URL ends with something like `#-3723418314`. Insert
+   `100` right after the minus sign, so `-3723418314` becomes
+   `-1003723418314`. That is your `CHANNEL_CHAT_ID`.
+
+2. **getUpdates via your own bot.** Add the bot to the channel as
+   admin, post any message there by hand, then open
+   `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates` in a
+   browser. Look for a `channel_post` entry; the `"chat":{"id":...}`
+   field has the exact id to paste.
+
+A public `@handle` is also accepted (`CHANNEL_CHAT_ID="@mychannel"`),
+but the numeric id is the safer production choice.
+
+Do NOT put an invite-link slug like `+oPN5XjvvARNjYzc0` here. Telegram
+rejects it as "chat not found". Invite links belong in
+`CHANNEL_PUBLIC_URL`, not here.
+
+For the tap-through link in `/start`, set `CHANNEL_PUBLIC_URL` to the
+share link. For a public channel that is `https://t.me/yourchannel`;
+for a private channel use its invite link, e.g.
+`https://t.me/+oPN5XjvvARNjYzc0`. Leave it empty to show no link.
 
 ## Run locally
 

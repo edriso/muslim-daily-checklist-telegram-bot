@@ -178,10 +178,26 @@ parent-dir creation), `startScheduler` skipping an invalid cron,
 goes stale.
 
 `pnpm send-test` runs `scripts/send-test.ts`: a manual dev tool that
-posts every message + the poll to the channel once and exits. It needs
-`.env` (BOT_TOKEN + CHANNEL_CHAT_ID) but NOT bot-admin rights (unlike
-`/admin_run`). It reuses the real send code, so it is a true
-end-to-end check. Not imported by the app; safe to keep in the repo.
+fires every schedule once via the same `runSchedule` the cron loop
+uses, then exits. Three properties matter:
+
+  * It calls `bot.api.getChat(channelChatId)` as a preflight before
+    the loop. A bad token, wrong chat id, or invite-link slug pasted
+    as the id fails fast with one clean diagnostic instead of N
+    identical 400s scrolling past.
+  * Re-running it auto-cleans the previous run's posts (same
+    delete-previous logic the scheduler uses). Per-machine: the
+    pointer file is local, so a `send-test` from a dev laptop and a
+    real prod cron fire do not see each other's posts.
+  * It posts the exact content subscribers see (no banner, no
+    wrapper). After the first successful send the loop continues
+    even if later schedules fail (those are likely content-specific);
+    if the FIRST send fails it bails so you do not stack N errors.
+
+Needs `.env` (BOT_TOKEN + CHANNEL_CHAT_ID) and the bot to be a
+channel admin with "Post messages" + "Delete messages". Does NOT
+require `ADMIN_TELEGRAM_ID` (unlike `/admin_run`). Not imported by
+the app; safe to keep in the repo.
 
 ## Git
 
