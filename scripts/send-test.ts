@@ -1,81 +1,68 @@
 /**
  * Manual test sender (development tool, NOT used by the running bot).
  *
- * It posts every content message + the poll to your channel once, then
- * exits. Use it to eyeball the exact text/formatting subscribers will
- * see, without waiting for a cron time and without needing admin rights
- * on the bot (unlike the in-chat `/admin_run` command).
+ * It fires every schedule once via the SAME `runSchedule` the cron loop
+ * uses, then exits. So:
+ *
+ *   - You see in the channel exactly what subscribers see — no banner,
+ *     no test wrapper, no formatting drift.
+ *   - The same delete-previous cleanup runs too. Run `pnpm send-test`
+ *     twice and the second run wipes the first run's posts before
+ *     posting fresh ones — no manual cleanup needed.
+ *
+ * One gotcha — cleanup is per-machine, not per-channel:
+ *   The bot tracks what to delete in a small local file
+ *   (`data/last-message-ids.json`) on whichever machine ran it. That
+ *   file is NOT inside the channel and NOT tied to your credentials.
+ *   So even if your laptop's `.env` points at the prod channel with
+ *   prod's token, your laptop and the deployed server still keep
+ *   separate files, and each side only deletes ids it wrote itself.
+ *
+ *   In practice: re-running `send-test` on the same machine cleans
+ *   up after itself, but a test post from your laptop won't be
+ *   cleaned up by a later prod cron fire (and vice versa). For any
+ *   cross-machine leftovers, delete them from the channel by hand.
  *
  * ── How to run ────────────────────────────────────────────────────────
  *   1. Make sure `.env` has BOT_TOKEN and CHANNEL_CHAT_ID set, and that
- *      the bot is an admin of that channel with "Post messages".
+ *      the bot is an admin of the channel with "Post messages" and
+ *      "Delete messages" rights (the second matters from the 2nd run
+ *      onwards, for cleanup).
  *   2. From the project root:
  *
  *        pnpm send-test
  *
  *      (equivalent to: pnpm exec tsx scripts/send-test.ts)
  *
- *   3. Open the channel, review the posts, then DELETE them — they are
- *      test posts, not real scheduled content.
- *
- * It reuses the real postToChannel / sendPollToChannel, so this is a
- * true end-to-end check of the exact code the scheduler runs in prod.
+ * Sends in the order declared by `schedules.ts`, which already mirrors
+ * a real day (morning → Friday Kahf → evening azkar → fasting → poll →
+ * pre-sleep) so the preview ends on the azkar, not on the poll.
  */
 import { Bot, type Context } from 'grammy';
 import { config } from '../src/config';
-import { postToChannel, sendPollToChannel } from '../src/lib/post';
-import { morningAzkar } from '../src/content/morningAzkar';
-import { eveningAzkar } from '../src/content/eveningAzkar';
-import { preSleepReminder } from '../src/content/preSleep';
-import { fridaySunnah } from '../src/content/fridaySunnah';
-import { fastingReminder } from '../src/content/fasting';
-import { nightReviewPoll } from '../src/content/poll';
+import { runSchedule } from '../src/scheduler';
+import { schedules } from '../src/schedules';
+import { initState } from '../src/lib/state';
 
 const bot = new Bot<Context>(config.botToken);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
+  // Same init the real entry point does. Without it, runSchedule's
+  // delete-previous step has no memory across runs and the script would
+  // just stack duplicates each invocation.
+  await initState(config.stateFilePath);
+
   console.log('Sending test content to', config.channelChatId);
 
-  await postToChannel(
-    bot,
-    '🧪 رسائل اختبار للبوت، يمكنك حذفها بعد المعاينة.\nهذه ليست نِيّةً للنشر، إنما لفحص الشكل فقط.',
-    { scheduleName: 'test-banner' },
-  );
-  await sleep(1500);
-
-  // Ordered to mirror a real day so the preview reads the way
-  // subscribers see it: morning, then Friday Kahf, then the evening
-  // azkar, then the Sun/Wed fasting reminder. The poll and the
-  // pre-sleep reminder are sent after, in the same order as the bedtime
-  // cluster (poll, then pre-sleep last) so the preview also ends on the
-  // azkar, not on the poll.
-  const messages: Array<[string, string]> = [
-    ['morning_azkar', morningAzkar],
-    ['friday_sunnah', fridaySunnah],
-    ['evening_azkar', eveningAzkar],
-    ['fasting_reminder', fastingReminder],
-  ];
-
-  for (const [name, text] of messages) {
-    const id = await postToChannel(bot, text, { scheduleName: name });
-    console.log(`  ${name}: ${id === null ? 'FAILED' : 'message ' + id}`);
+  for (const def of schedules) {
+    const id = await runSchedule(bot, def);
+    console.log(`  ${def.name}: ${id === null ? 'FAILED' : 'message ' + id}`);
     await sleep(1500);
   }
 
-  const pollId = await sendPollToChannel(bot, nightReviewPoll, {
-    scheduleName: 'night_review_poll',
-  });
-  console.log(`  night_review_poll: ${pollId === null ? 'FAILED' : 'message ' + pollId}`);
-  await sleep(1500);
-
-  const preSleepId = await postToChannel(bot, preSleepReminder, {
-    scheduleName: 'pre_sleep',
-  });
-  console.log(`  pre_sleep: ${preSleepId === null ? 'FAILED' : 'message ' + preSleepId}`);
-
-  console.log('Done. Remember to delete these test posts from the channel.');
+  console.log('Done.');
   process.exit(0);
 }
 
