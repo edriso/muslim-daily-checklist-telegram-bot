@@ -23,13 +23,14 @@ const tasks: ScheduledTask[] = [];
  *
  *   message default = 1   → exactly one live copy (the old azkar rule).
  *   poll default    = 0   → never track, never delete (historic rule).
- *   N > 1           → keep the latest N (tonight + previous nights).
+ *   N > 1           → keep the latest N (a "tonight + previous nights"
+ *                     window — supported but currently unused in prod).
  *
  * After every successful post the new id is appended to that schedule's
  * tracked list, then any ids beyond `keepLast` (oldest first) are
- * deleted from Telegram. With `keepLast: 2` on the nightly poll, the
- * channel shows tonight's + yesterday's at any moment, and the
- * day-before-yesterday's gets cleaned up when tonight's fires.
+ * deleted from Telegram. The nightly poll opts in with `keepLast: 1`,
+ * which gives the same replace-on-next-fire behavior as messages:
+ * tonight's poll fires, last night's gets deleted.
  *
  * Order matters: post FIRST, then trim. Never the other way around — a
  * network blip between "delete old" and "post new" would briefly leave

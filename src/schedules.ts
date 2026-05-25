@@ -96,14 +96,14 @@ export const schedules: ScheduleDef[] = [
     kind: 'poll',
     cron: '43 21 * * *',
     poll: nightReviewPoll,
-    // Ring buffer of size 2: the channel shows tonight's poll alongside
-    // yesterday's (already closed, still readable). The day-before's is
-    // deleted when tonight's fires. Yesterday's tally is the most useful
-    // historical signal ("how did the community do last night?"); going
-    // deeper just stacks identical-question polls and clutters scroll.
-    keepLast: 2,
+    // Replace-on-next-fire (same rule as messages): when tonight's poll
+    // fires, last night's is deleted. Polls default to 0 (untracked), so
+    // this single line is what opts the poll into cleanup. The channel
+    // therefore shows exactly one live poll — no stack of identical
+    // questions burying the welcome / pinned intro for new joiners.
+    keepLast: 1,
     description:
-      'استبيان مراجعة الليلة (مجهول)، كل يوم 9:43 م. تُحفَظ ليلتان (الحالية والسابقة) ثم تُحذَف الأقدم.',
+      'استبيان مراجعة الليلة (مجهول)، كل يوم 9:43 م. تُحذَف نسخة الليلة السابقة عند نشر الجديدة.',
   },
   {
     name: 'pre_sleep',

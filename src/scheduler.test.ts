@@ -263,26 +263,28 @@ describe('runSchedule ring buffer (keepLast > 1)', () => {
     expect(postOrder < deleteOrder).toBe(true);
   });
 
-  it('the real night_review_poll schedule is configured as a size-2 ring buffer', async () => {
+  it('the real night_review_poll schedule is wired for replace-on-next-fire (keepLast=1)', async () => {
+    // Polls default to keepLast=0 (untracked), so this asserts the poll
+    // actively opts in to cleanup with the same single-live-copy rule
+    // messages use. If someone bumps it back to a ring buffer the test
+    // forces them to update this expectation deliberately.
     const sendPoll = vi
       .fn()
       .mockResolvedValueOnce({ message_id: 9001 })
-      .mockResolvedValueOnce({ message_id: 9002 })
-      .mockResolvedValueOnce({ message_id: 9003 });
+      .mockResolvedValueOnce({ message_id: 9002 });
     const deleteMessage = vi.fn().mockResolvedValue(true);
     const bot = {
       api: { sendMessage: vi.fn(), sendPoll, deleteMessage },
     } as unknown as Bot<Context>;
     const def = findSchedule('night_review_poll')!;
-    expect(def.keepLast).toBe(2);
+    expect(def.keepLast).toBe(1);
 
-    await runSchedule(bot, def);
     await runSchedule(bot, def);
     await runSchedule(bot, def);
 
     expect(deleteMessage).toHaveBeenCalledTimes(1);
     expect(deleteMessage.mock.calls[0][1]).toBe(9001);
-    expect(getMessageIds('night_review_poll')).toEqual([9002, 9003]);
+    expect(getMessageIds('night_review_poll')).toEqual([9002]);
   });
 
   it('a failed post on a ring-buffer fire leaves tracked ids untouched', async () => {

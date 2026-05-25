@@ -62,10 +62,12 @@ muslim-daily-checklist-telegram-bot-channel/
   - messages default to **1** → exactly one live copy (the old
     replace-on-next-fire rule, unchanged).
   - polls default to **0** → never tracked, never deleted.
-  - `night_review_poll` overrides to **2** → channel always shows
-    tonight + last night, day-before-yesterday is deleted on tonight's
-    fire. Yesterday's tally is the most useful historic signal;
-    deeper just stacks identical-question polls.
+  - `night_review_poll` overrides to **1** → same replace-on-next-fire
+    rule as messages. Tonight's poll fires, last night's is deleted.
+    One live poll in the channel at any time. Yesterday's tally goes
+    with it — judged not worth the daily stack of identical-question
+    polls. The N > 1 code path is still supported (see scheduler.ts)
+    but unused in prod.
 
   Order is post-then-trim so the channel is never empty mid-cycle. Any
   message NOT posted via this code path (your welcome / pinned intro,
@@ -165,9 +167,10 @@ cover: schedule and Telegram poll constraints, `post.ts` success and
 failure mocks (including close_date clamping and `deleteChannelMessage`),
 `runSchedule` kind dispatch + the `keepLast` ring buffer (first fire
 posts only, message-default-1 deletes previous on second fire, polls
-without `keepLast` are never tracked, `keepLast: 2` fills then evicts
-oldest on third fire, failed posts leave state, `night_review_poll` is
-wired as size-2), `lib/state.ts` (empty/corrupt file resilience,
+without `keepLast` are never tracked, the synthetic `keepLast: 2` case
+fills then evicts oldest on third fire, failed posts leave state,
+`night_review_poll` is wired for replace-on-next-fire with `keepLast: 1`),
+`lib/state.ts` (empty/corrupt file resilience,
 legacy single-number migration, array round-trip, clear-on-empty,
 parent-dir creation), `startScheduler` skipping an invalid cron,
 `pickContent` (blank and array handling), `channelUrlFrom`, and
