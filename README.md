@@ -1,14 +1,17 @@
-# Muslim Daily Checklist Telegram Channel Bot
+# Zaaduna
 
-A small, no-database Telegram bot that posts daily Islamic reminders to
-one channel and runs a **nightly anonymous self-review poll**.
+A small Telegram bot that posts a daily
+shared wird to one channel (morning and evening azkar, Friday sunan,
+pre-sleep dhikr, fasting reminders) and ends each night with an honest,
+anonymous self-check.
 
-The poll is the heart of it: every night the bot asks you to take
-honest account of your day, with the day's deeds as options. It is **anonymous and
-multiple-answer**, so Telegram tallies the votes and shows everyone the
-percentages. Nobody, not even this bot, sees who voted. That gives the
-community motivation ("most people kept their azkar today") with no
-showing-off and no database.
+The night poll is the heart of it. After Isha, the bot lists the day's
+deeds and asks you to tick the ones you actually did. The vote is
+**anonymous and multiple-answer**, so Telegram tallies the answers and
+shows the channel the percentages, but nobody, not even this bot, ever
+learns who voted for what. You get the lift of a community ("most of us
+kept our azkar today") without the riya, and the bot keeps no database
+of who did what.
 
 ## How it works (1-minute mental model)
 

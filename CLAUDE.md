@@ -1,4 +1,4 @@
-# Muslim Daily Checklist Bot: Repo Guide
+# Zaaduna (زادنا): Repo Guide
 
 ## What this is
 
@@ -16,7 +16,7 @@ touched. See the "Replace-on-next-fire" design choice below.
 ## Folder layout
 
 ```
-muslim-daily-checklist-telegram-bot-channel/
+zaaduna/
 ├── src/
 │   ├── index.ts        Entry point (config → bot → scheduler → health)
 │   ├── config.ts       env: BOT_TOKEN, CHANNEL_CHAT_ID, CHANNEL_PUBLIC_URL, ...
