@@ -3,7 +3,7 @@ import { eveningAzkar } from './content/eveningAzkar';
 import { preSleepReminder } from './content/preSleep';
 import { fridaySunnah } from './content/fridaySunnah';
 import { fastingReminder } from './content/fasting';
-import { nightReviewPoll } from './content/poll';
+import { buildNightReviewPoll } from './content/poll';
 import type { ScheduleDef } from './types';
 
 export type { ScheduleDef } from './types';
@@ -106,7 +106,11 @@ export const schedules: ScheduleDef[] = [
     name: 'night_review_poll',
     kind: 'poll',
     cron: '45 21 * * *',
-    poll: nightReviewPoll,
+    // Factory, not a fixed spec: the spec is rebuilt each fire so
+    // Monday/Thursday nights (in TZ_NAME) get an extra «صيام الاثنين/
+    // الخميس» option. One schedule, one state key → replace-on-next-
+    // fire (keepLast: 1) still works across day-types. See poll.ts.
+    poll: () => buildNightReviewPoll(),
     // Replace-on-next-fire (same rule as messages): when tonight's poll
     // fires, last night's is deleted. Polls default to 0 (untracked), so
     // this single line is what opts the poll into cleanup. The channel

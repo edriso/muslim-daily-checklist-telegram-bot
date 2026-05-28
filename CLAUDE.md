@@ -83,6 +83,13 @@ zaaduna/
 - **`ScheduleDef` is a discriminated union** (`kind: 'message' |
 'poll'`). `scheduler.ts#runSchedule` switches on `kind`. Adding a
   schedule needs no other code change.
+- **`PollSchedule.poll` may be a factory.** `() => PollSpec` is rebuilt
+  per fire, so the night review can vary by day-of-week (Mon/Thu nights
+  add a «صيام الاثنين/الخميس» option — see `content/poll.ts`). One
+  schedule + one cron + one state key — replace-on-next-fire stays
+  intact across day-types. Day-of-week is computed in `config.timezone`
+  via `Intl.DateTimeFormat`, never `Date.getDay()` (which would read
+  the host TZ).
 - **Channel text uses NO `parse_mode`.** Arabic du'a/Quran references
   contain `* _ ( ) <` etc. that Markdown/HTML would 400 on. Plain text
   renders Arabic + emoji perfectly. Deliberate simplicity-over-styling.
@@ -128,6 +135,10 @@ in the same file or a schedule split.
 2. The poll → edit `src/content/poll.ts` (stay anonymous + multi;
    keep any emoji at the **end** of each option/question and leave a
    little margin under 100 chars — `rtlIsolate` adds 2; see below).
+   The base list is 9 items; Mon/Thu nights add one fasting option,
+   so the total stays ≤ 10 (Telegram's hard max). If you grow the
+   base list above 9, the Mon/Thu variant overflows — tests will
+   catch it.
 3. Times / new schedules → edit `src/schedules.ts`.
    The framework code does not need to change.
 

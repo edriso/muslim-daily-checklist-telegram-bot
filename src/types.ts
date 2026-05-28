@@ -69,10 +69,14 @@ export interface MessageSchedule extends BaseSchedule {
   content: string | readonly string[];
 }
 
-/** Sends one anonymous poll. */
+/** Sends one anonymous poll. `poll` may be a fixed spec, or a factory
+ *  called at fire time so the question/options can vary by day-of-week
+ *  (e.g. the nightly review adds «صيام الاثنين/الخميس» on Mon/Thu).
+ *  Keeping ONE schedule + a factory — rather than 3 cron entries — is
+ *  what lets the replace-on-next-fire cleanup track one stable state key. */
 export interface PollSchedule extends BaseSchedule {
   kind: 'poll';
-  poll: PollSpec;
+  poll: PollSpec | (() => PollSpec);
 }
 
 export type ScheduleDef = MessageSchedule | PollSchedule;

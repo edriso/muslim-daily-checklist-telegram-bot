@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import cron from 'node-cron';
 import { schedules, findSchedule } from './schedules';
 import { MIN_CLOSE_HOURS, MAX_CLOSE_HOURS, rtlIsolate } from './lib/post';
+import { buildNightReviewPoll } from './content/poll';
+import type { PollSpec } from './types';
 
 /**
  * The schedules array is the central config. These tests guard against
@@ -76,32 +78,46 @@ describe('poll schedules', () => {
     expect(pollSchedules.length).toBe(1);
   });
 
+  // Resolve a schedule's `poll` whether it is a fixed spec or a factory.
+  // Day-aware polls (the night review) are recomputed per fire, so
+  // tests must exercise both shapes.
+  function resolvePoll(p: PollSpec | (() => PollSpec)): PollSpec {
+    return typeof p === 'function' ? p() : p;
+  }
+
+  function assertPollConstraints(p: PollSpec, label: string) {
+    expect(p.question.trim().length, `${label} question empty`).toBeGreaterThan(0);
+    // Validate the length we ACTUALLY transmit: lib/post.ts wraps the
+    // question + every option in rtlIsolate (RLI..PDI = +2 code
+    // points). Telegram's limit applies to the sent string, so a near
+    // -limit author string must still fit after the wrap, or sendPoll
+    // 400s. Same defensive spirit as the close_date clamp.
+    expect(rtlIsolate(p.question).length, `${label} question too long`).toBeLessThanOrEqual(
+      MAX_QUESTION_CHARS,
+    );
+
+    expect(p.options.length, `${label} options count`).toBeGreaterThanOrEqual(2);
+    expect(p.options.length, `${label} options count`).toBeLessThanOrEqual(10);
+    for (const opt of p.options) {
+      expect(opt.trim().length, `${label} option empty`).toBeGreaterThan(0);
+      expect(rtlIsolate(opt).length, `${label} option too long: ${opt}`).toBeLessThanOrEqual(
+        MAX_OPTION_CHARS,
+      );
+    }
+
+    // Options must be distinct, or the percentages are meaningless.
+    expect(new Set(p.options).size, `${label} duplicate options`).toBe(p.options.length);
+
+    if (p.closeAfterHours !== undefined) {
+      expect(p.closeAfterHours).toBeGreaterThanOrEqual(MIN_CLOSE_HOURS);
+      expect(p.closeAfterHours).toBeLessThanOrEqual(MAX_CLOSE_HOURS);
+    }
+  }
+
   it('the poll obeys every Telegram constraint', () => {
     for (const s of pollSchedules) {
       if (s.kind !== 'poll') continue; // narrow for TS
-      const p = s.poll;
-      expect(p.question.trim().length).toBeGreaterThan(0);
-      // Validate the length we ACTUALLY transmit: lib/post.ts wraps the
-      // question + every option in rtlIsolate (RLI..PDI = +2 code
-      // points). Telegram's limit applies to the sent string, so a near
-      // -limit author string must still fit after the wrap, or sendPoll
-      // 400s. Same defensive spirit as the close_date clamp.
-      expect(rtlIsolate(p.question).length).toBeLessThanOrEqual(MAX_QUESTION_CHARS);
-
-      expect(p.options.length).toBeGreaterThanOrEqual(2);
-      expect(p.options.length).toBeLessThanOrEqual(10);
-      for (const opt of p.options) {
-        expect(opt.trim().length).toBeGreaterThan(0);
-        expect(rtlIsolate(opt).length).toBeLessThanOrEqual(MAX_OPTION_CHARS);
-      }
-
-      // Options must be distinct, or the percentages are meaningless.
-      expect(new Set(p.options).size).toBe(p.options.length);
-
-      if (p.closeAfterHours !== undefined) {
-        expect(p.closeAfterHours).toBeGreaterThanOrEqual(MIN_CLOSE_HOURS);
-        expect(p.closeAfterHours).toBeLessThanOrEqual(MAX_CLOSE_HOURS);
-      }
+      assertPollConstraints(resolvePoll(s.poll), s.name);
     }
   });
 
@@ -109,10 +125,45 @@ describe('poll schedules', () => {
     const review = findSchedule('night_review_poll');
     expect(review?.kind).toBe('poll');
     if (review?.kind === 'poll') {
+      const p = resolvePoll(review.poll);
       // Defaults are anonymous + multi; assert they are not disabled.
-      expect(review.poll.isAnonymous).not.toBe(false);
-      expect(review.poll.allowsMultipleAnswers).not.toBe(false);
+      expect(p.isAnonymous).not.toBe(false);
+      expect(p.allowsMultipleAnswers).not.toBe(false);
     }
+  });
+
+  // buildNightReviewPoll varies by day-of-week in TZ_NAME: Mon/Thu add
+  // a «صيام الاثنين/الخميس» option, taking the list to Telegram's max
+  // of 10. Iterate every weekday so a future tweak that overflows the
+  // limit, drops a key, or duplicates an option fails the suite
+  // regardless of which day the CI run happens to be.
+  describe('night review poll — day-of-week variants', () => {
+    // 2024-12-01 is a Sunday (UTC). Add N days for each weekday.
+    const SUNDAY = new Date('2024-12-01T21:45:00Z');
+    const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(SUNDAY.getTime() + i * 24 * 60 * 60 * 1000);
+      const label = WEEKDAY_NAMES[i];
+      it(`${label} variant is valid and within Telegram limits`, () => {
+        const spec = buildNightReviewPoll(day, 'UTC');
+        assertPollConstraints(spec, `night_review_poll (${label})`);
+      });
+    }
+
+    it('adds صيام on Monday and Thursday only', () => {
+      const mon = buildNightReviewPoll(new Date(SUNDAY.getTime() + 1 * 86400000), 'UTC');
+      const thu = buildNightReviewPoll(new Date(SUNDAY.getTime() + 4 * 86400000), 'UTC');
+      const wed = buildNightReviewPoll(new Date(SUNDAY.getTime() + 3 * 86400000), 'UTC');
+
+      expect(mon.options.length).toBe(10);
+      expect(thu.options.length).toBe(10);
+      expect(wed.options.length).toBe(9);
+
+      expect(mon.options.some((o) => o.includes('صيام الاثنين'))).toBe(true);
+      expect(thu.options.some((o) => o.includes('صيام الخميس'))).toBe(true);
+      expect(wed.options.some((o) => o.includes('صيام'))).toBe(false);
+    });
   });
 });
 

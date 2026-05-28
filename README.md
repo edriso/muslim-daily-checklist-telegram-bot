@@ -52,7 +52,7 @@ docs/DEPLOY.md    How to deploy
 | `evening_azkar`     | every day 17:00 | أذكار المساء                                              |
 | `fasting_reminder`  | Sun & Wed 21:40 | تذكير صيام الإثنين/الخميس (الليلة التي قبلها)             |
 | `pre_sleep`         | every day 21:43 | سورة المُلك + أذكار النوم + نيّة قيام الليل               |
-| `night_review_poll` | every day 21:45 | Anonymous self-review **poll** (the deeds)                |
+| `night_review_poll` | every day 21:45 | Anonymous self-review **poll** (the deeds; Mon/Thu nights add صيام)                |
 
 Posts are deliberately grouped into one tight window so they arrive
 together as a single "session" instead of scattered buzzes. What makes
@@ -137,7 +137,9 @@ Everything lives in source. No database; restart (or redeploy) to apply.
 - **Message wording:** edit the matching file in `src/content/`.
 - **The poll:** edit `src/content/poll.ts` (the question and its
   options). Keep it anonymous and multiple-answer, that is the whole
-  point.
+  point. The list is built at fire time so Monday and Thursday nights
+  add a «صيام الاثنين/الخميس» option to the base 9. Stay at 9 in the
+  base or the Mon/Thu variant overflows Telegram's 10-option limit.
 - **Times or new entries:** edit `src/schedules.ts`. Each entry is one
   cron rule plus `kind: 'message'` (with `content`) or `kind: 'poll'`
   (with `poll`).

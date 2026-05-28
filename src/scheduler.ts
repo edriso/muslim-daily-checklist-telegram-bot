@@ -93,7 +93,10 @@ function effectiveKeepLast(def: ScheduleDef): number {
 /** Dispatch on kind. Returns the new message_id or null on failure. */
 async function sendForKind(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
   if (def.kind === 'poll') {
-    return sendPollToChannel(bot, def.poll, { scheduleName: def.name });
+    // `poll` may be a fixed spec or a factory rebuilt per fire (so the
+    // night review can vary by day-of-week — see content/poll.ts).
+    const spec = typeof def.poll === 'function' ? def.poll() : def.poll;
+    return sendPollToChannel(bot, spec, { scheduleName: def.name });
   }
   const text = pickContent(def.content);
   if (!text) {
