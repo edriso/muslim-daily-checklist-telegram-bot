@@ -203,9 +203,14 @@ the second form and not re-fire a notification or break the pin.
 
 ## Deploying
 
-See `docs/DEPLOY.md`. In short: a host that keeps the process alive,
-`pnpm build` then `pnpm start`, the env vars set, and the bot added to
-the channel as an admin.
+See `docs/DEPLOY.md` for the host-agnostic notes (env vars, channel
+admin rights, state file). For Fly.io specifically there is a full
+walkthrough in `FLYIO.md` at the repo root (Dockerfile + fly.toml are
+already in the repo).
+
+In short: a host that keeps the process alive, `pnpm build` then
+`pnpm start`, the env vars set, and the bot added to the channel as
+an admin with **both** "Post messages" and "Delete messages" granted.
 
 ## What this is NOT
 

@@ -1,0 +1,47 @@
+# fly.toml — deployment config for the Zaaduna Telegram bot.
+#
+# This bot is long-running and has no public HTTP surface. Grammy
+# keeps a long-polling connection to Telegram, which Fly treats as
+# "machine in use" and does not auto-suspend. Because of that, there
+# is no [http_service] / [[services]] block here — including one
+# would open a public port for nothing, and the auto-stop / auto-
+# start behavior tied to services would not apply to a bot anyway.
+#
+# Before first deploy:
+#   1. `fly apps create zaaduna` reserves the name on Fly's side.
+#      If `zaaduna` is taken, pick another and update `app =` below.
+#   2. `primary_region` is set to `cdg` (Paris). Change it if your
+#      audience is elsewhere — see https://fly.io/docs/reference/regions/.
+#   3. Set secrets (NOT in this file):
+#        fly secrets set BOT_TOKEN=...
+#        fly secrets set CHANNEL_CHAT_ID=-100...
+#        fly secrets set TZ_NAME=Africa/Cairo
+#      See FLYIO.md for the full list.
+
+app = "zaaduna"
+primary_region = "cdg"
+
+# 10s of graceful shutdown time. src/index.ts wraps bot.stop in a 5s
+# race, then exits. A 10s grace window gives the in-flight send room
+# to finish before SIGKILL.
+kill_signal = "SIGTERM"
+kill_timeout = "10s"
+
+[build]
+  # Uses the Dockerfile in the repo root. No buildpack auto-detection.
+
+[env]
+  NODE_ENV = "production"
+
+[processes]
+  # Single process group. `node --import tsx dist/index.js` boots
+  # config, the health server (port 8080, internal only), Telegram
+  # long-polling, and all the crons.
+  app = "node --import tsx dist/index.js"
+
+[[vm]]
+  # 256 MB is plenty for this bot — observed ~50-100 MB resident.
+  # `shared-cpu-1x` is the smallest tier and the right starting point.
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  processes = ["app"]

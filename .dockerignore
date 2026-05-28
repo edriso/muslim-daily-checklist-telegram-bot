@@ -1,0 +1,44 @@
+# Files the Docker daemon should NOT receive when building the image.
+# Smaller context = faster builds and no accidental secrets in layers.
+
+node_modules
+dist
+.git
+.gitignore
+
+# Secrets — Fly reads env via `fly secrets set`, not from .env files.
+.env
+.env.*
+!.env.example
+
+# Runtime pointer file — recreated by the bot on first write.
+data
+
+# Build output / artifacts
+coverage
+*.log
+*.tsbuildinfo
+
+# Editor / OS junk
+.vscode
+.idea
+.DS_Store
+.claude
+
+# Tests — compiled into dist by tsc but never executed at runtime.
+# Excluding them shaves a few kB off the image; tsc still runs over
+# the rest of src/ unchanged.
+src/**/*.test.ts
+
+# Dev-only scripts (send-test, post-welcome). Not imported by the app.
+scripts
+
+# Docs and config the build does not need
+README.md
+CLAUDE.md
+FLYIO.md
+docs
+.editorconfig
+.prettierrc
+.prettierignore
+vitest.config.ts

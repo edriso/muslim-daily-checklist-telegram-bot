@@ -31,7 +31,11 @@ zaaduna/
 │   ├── send-test.ts       Manual dev sender (not imported by the app)
 │   └── post-welcome.ts    Manual welcome-message post/edit (not imported)
 ├── data/               Tiny pointer file (gitignored). Auto-created.
-├── docs/DEPLOY.md
+├── docs/DEPLOY.md      Host-agnostic deploy notes (env vars, admin rights)
+├── FLYIO.md            Fly.io-specific walkthrough (setup, triage, rollback)
+├── Dockerfile          Two-stage Node 22 alpine build (Fly.io + any container host)
+├── .dockerignore       Files excluded from the Docker build context
+├── fly.toml            Fly.io app config (no [http_service]; see FLYIO.md)
 ├── package.json
 └── tsconfig.json
 ```

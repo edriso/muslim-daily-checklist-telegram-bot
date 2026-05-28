@@ -87,6 +87,20 @@ hand to confirm the channel receives it, e.g.:
 /admin_run night_review_poll
 ```
 
+## Fly.io
+
+There is a `Dockerfile` and `fly.toml` in the repo root, plus a
+full walkthrough in **`FLYIO.md`** at the repo root (first deploy,
+secrets, day-to-day commands, triage, rollback). Read that file
+for everything Fly-specific. The short version:
+
+```bash
+fly apps create zaaduna
+fly secrets set BOT_TOKEN=... CHANNEL_CHAT_ID=-100... TZ_NAME=Africa/Cairo
+fly deploy
+fly scale count 1 -a zaaduna   # pin to one machine (see FLYIO.md)
+```
+
 ## Railway
 
 1. Deploy from GitHub repo.
