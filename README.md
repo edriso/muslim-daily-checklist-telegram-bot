@@ -221,4 +221,5 @@ long-lived channel poster on purpose.
 
 ## License
 
-MIT
+0BSD — free to use, copy, modify, and distribute for any purpose, with no
+attribution required. See `LICENSE`.
