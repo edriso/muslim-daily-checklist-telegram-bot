@@ -21,9 +21,11 @@ import { config } from '../config';
  * اليوم» بين عبادات النهار وعنقود ما قبل النوم (خشوع الصلاة ← الصيام
  * ← الاستغفار)، فالصيامُ عبادةُ يومٍ كاملٍ يحسُن وَسْمُها قبل بدء
  * مراجعة الليل، فيبلغ المجموع ١٠ — الحدّ الأقصى. تُولَّد القائمة لحظةَ
- * الإرسال عبر buildNightReviewPoll اعتمادًا على اليوم في توقيت
- * TZ_NAME، ولا يُغيَّر مفتاحُ الجدولة، فيبقى استبدالُ النشر التالي
- * (keepLast: 1) يعمل بمفتاح state واحد. قيام الليل أُفرِد ببندٍ مستقلٍّ (لا يُدمَج
+ * الإرسال عبر buildNightReviewPoll: قائمةٌ أساسيّةٌ واحدة (BASE_OPTIONS)
+ * تُحقَن فيها بنودُ اليوم من جدولٍ مفتاحُه اليومُ في توقيت TZ_NAME
+ * (OPTIONS_BY_DAY) — فإضافةُ قائمةٍ خاصّةٍ لاحقًا (الجمعة مثلًا) سطرٌ
+ * واحدٌ في ذلك الجدول لا تفرُّعٌ في الدالّة. ولا يُغيَّر مفتاحُ الجدولة،
+ * فيبقى استبدالُ النشر التالي (keepLast: 1) يعمل بمفتاح state واحد. قيام الليل أُفرِد ببندٍ مستقلٍّ (لا يُدمَج
  * مع الضحى) لأنّه عبادةٌ مستقلّةٌ بزمنها وأجرها ونيّتها، والدمج
  * يُلبِّس التأشير. وكلتا النافلتين صِيغتا «ولو ركعتين» على هَدْي
  * «أحبُّ الأعمالِ إلى اللهِ أدومُها وإن قلّ» — تشجيعًا للمداومة لا
@@ -43,24 +45,48 @@ import { config } from '../config';
 const QUESTION =
   'حاسِب نفسك قبل النوم: بمَ وفّقك الله اليوم؟ (سرّي مجهول؛ أشِّر بصدقٍ على ما أدّيت، وانوِ بمشاركتك تشجيعَ غيرك والتنافسَ في الخير) 📋';
 
-// ترتيب البنود مقصود — انظر الشرح في رأس الملف. الصيام يُحقَن بين
-// «خشوع الصلاة» و«الاستغفار» (بعد عبادات النهار، قبل عنقود ما قبل
-// النوم) عند بناء قائمة ليلتَي الاثنين والخميس، لذا يُقسَم المصدر
-// إلى مجموعتين متجاورتين.
-const OPTIONS_BEFORE_FASTING: readonly string[] = [
+// القائمة الأساسية («العامّة») — تُعرَض كلّ ليلة بهذا الترتيب المقصود
+// (انظر رأس الملف). مصدرٌ واحدٌ للحقيقة: الليالي الخاصّة (الاثنين/
+// الخميس، ومستقبلًا الجمعة مثلًا) تُدرِج بنودها فيها ولا تعيد تعريفها،
+// فلا تتكرّر القائمة العامّة ولا تتفرّع نُسَخٌ يصعب إبقاؤها متّسقة.
+const BASE_OPTIONS: readonly string[] = [
   'أذكار الاستيقاظ ثم صلاة الفجر في وقتها ⏰',
   'أذكار الصباح والمساء 🛡️',
   'ورد القرآن (ولو صفحة) 🔖',
   'صلاة الضحى ولو ركعتين ☀️',
   'حفظت لساني عن الغِيبة، ولم يَغلِبني الغضب (طوّلت بالي ولِنتُ لمن حولي) 🤍',
   'اجتهدت في خشوع صلاتي وطمأنينتها، وقُلت أذكار ما بعد الصلاة المفروضة 🕌',
-];
-
-const OPTIONS_AFTER_FASTING: readonly string[] = [
   'استغفار ١٠٠ مرّة 📿',
   'قيام الليل ولو ركعتين ✨',
   'سورة المُلك وأذكار النوم 🌙',
 ];
+
+/** بندٌ إضافيٌّ يُحقَن في القائمة الأساسية في ليلةٍ بعينها. */
+interface DayOption {
+  /** نصّ الخيار (الأيقونة في النهاية؛ أبقِ هامشًا تحت ١٠٠ حرف). */
+  option: string;
+  /**
+   * يُدرَج مباشرةً *بعد* البند الأساسيّ المطابق لهذا النصّ، فينزل
+   * البندُ الخاصّ في موضعه المقصود من الترتيب لا في آخر القائمة. اتركه
+   * (undefined) للإلحاق في النهاية. إن لم يُوجَد البندُ المرجعيّ يُرمى
+   * خطأٌ — فالخطأُ المطبعيّ يُسقِط الاختبارات ولا يَشحن استبيانًا
+   * مختلَّ الترتيب.
+   */
+  after?: string;
+}
+
+// نقطة حقن الصيام: بعد «خشوع الصلاة» (آخر عبادات النهار) وقبل عنقود
+// ما قبل النوم (استغفار ← قيام ← مُلك/نوم).
+const FASTING_ANCHOR =
+  'اجتهدت في خشوع صلاتي وطمأنينتها، وقُلت أذكار ما بعد الصلاة المفروضة 🕌';
+
+// اليوم في توقيت TZ_NAME (0=الأحد..6=السبت) ← بنودٌ تُضاف تلك الليلة.
+// هذه «نقطة التحرير» لأيّ تنويعٍ يوميّ: أضِف مفتاحًا (مثلًا 5 لقائمة
+// الجمعة) وبنودَه هنا — ولا تحتاج buildNightReviewPoll تعديلًا.
+const OPTIONS_BY_DAY: Record<number, readonly DayOption[]> = {
+  1: [{ option: 'صيام الاثنين 🌒', after: FASTING_ANCHOR }], // الاثنين
+  4: [{ option: 'صيام الخميس 🌒', after: FASTING_ANCHOR }], // الخميس
+};
 
 /** اليوم في توقيت TZ_NAME (0=Sun..6=Sat). نَستخدم Intl لا
  *  Date.getDay() حتّى يكون «الإثنين» إثنينَ القاهرة، لا إثنين خادم
@@ -69,6 +95,23 @@ function weekdayInTz(now: Date, tz: string): number {
   const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
   const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return map[wd] ?? 0;
+}
+
+/** حقن بنود اليوم في القائمة الأساسية، كلٌّ في موضعه (انظر DayOption). */
+function applyDayOptions(base: readonly string[], extras: readonly DayOption[]): string[] {
+  const options = [...base];
+  for (const { option, after } of extras) {
+    if (after === undefined) {
+      options.push(option);
+      continue;
+    }
+    const at = options.indexOf(after);
+    if (at === -1) {
+      throw new Error(`night review poll: anchor option not found: ${after}`);
+    }
+    options.splice(at + 1, 0, option);
+  }
+  return options;
 }
 
 /**
@@ -81,12 +124,7 @@ export function buildNightReviewPoll(
   tz: string = config.timezone,
 ): PollSpec {
   const day = weekdayInTz(now, tz);
-  const fastingOption =
-    day === 1 ? 'صيام الاثنين 🌒' : day === 4 ? 'صيام الخميس 🌒' : null;
-
-  const options = fastingOption
-    ? [...OPTIONS_BEFORE_FASTING, fastingOption, ...OPTIONS_AFTER_FASTING]
-    : [...OPTIONS_BEFORE_FASTING, ...OPTIONS_AFTER_FASTING];
+  const options = applyDayOptions(BASE_OPTIONS, OPTIONS_BY_DAY[day] ?? []);
 
   return {
     question: QUESTION,
