@@ -7,11 +7,9 @@ import { runSchedule } from './scheduler';
 const bot = new Bot<Context>(config.botToken);
 
 /**
- * Gate for the /admin_* commands. True only for a *private* message
- * (DM) from the configured primary admin. The private-chat check
- * matters: without it the commands would also fire in any group the
- * bot is in and leak the channel id / schedule internals there. If no
- * admin id is configured, every admin command is a silent no-op.
+ * Gate for /admin_* commands: true only for a DM from the configured
+ * admin. The private-chat check stops the commands firing (and leaking
+ * channel internals) in any group the bot is in. No admin id → no-op.
  */
 function isAdmin(ctx: Context): boolean {
   if (config.adminTelegramId === null) return false;
@@ -24,8 +22,7 @@ function scheduleNameList(): string {
   return schedules.map((s) => `  - ${s.name}`).join('\n');
 }
 
-// /start in DM. The bot is channel-first; this just explains it to anyone
-// who DMs the bot looking for commands.
+// /start in DM: the bot is channel-first, so this just explains itself.
 bot.command('start', async (ctx) => {
   if (ctx.chat?.type !== 'private') return;
   const link = config.channelUrl;
@@ -35,16 +32,13 @@ bot.command('start', async (ctx) => {
       'لا يوجد ما تتفاعل معه هنا، تابِع القناة لتصلك التذكيرات بإذن الله.' +
       '\n\n' +
       'This bot only posts on a schedule to its channel. Nothing to do here.' +
-      // One language-neutral link after both blocks: a URL needs no
-      // translation, so printing it once (not per language) is cleaner.
+      // One link after both language blocks (a URL needs no translation).
       (link ? `\n\n📢 ${link}` : ''),
   );
 });
 
-// Health check command. Useful for "is the process up?" probes without
-// hitting the /health HTTP endpoint. Plain text on purpose (same reason
-// the channel posts avoid parse_mode): a value that breaks Markdown
-// would 400 the reply itself and the admin would see nothing.
+// /admin_health: an "is it up?" snapshot in DM. Plain text (no
+// parse_mode), same reason as the channel posts.
 bot.command('admin_health', async (ctx) => {
   if (!isAdmin(ctx)) return;
   const uptime = Math.floor(process.uptime());
@@ -78,12 +72,9 @@ bot.command('admin_health', async (ctx) => {
   await ctx.reply(lines.join('\n'));
 });
 
-// /admin_run <name> manually fires one schedule by name. Same code path
-// as the cron callback, so it is a real end-to-end test. The feedback
-// must be honest: post.ts catches send failures and returns null, so a
-// null result means "nothing posted" for one of two reasons (empty
-// content OR a failed Telegram send) — say so, and point at the most
-// common cause instead of the misleading "produced nothing".
+// /admin_run <name>: manually fire one schedule via the same path the
+// cron uses (a real end-to-end test). A null result means "nothing
+// posted" — empty content or a failed send — so the reply says both.
 bot.command('admin_run', async (ctx) => {
   if (!isAdmin(ctx)) return;
   const raw = ctx.message?.text ?? '';

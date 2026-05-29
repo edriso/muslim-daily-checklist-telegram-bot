@@ -4,17 +4,10 @@ import { logger } from './lib/logger';
 const DEFAULT_PORT = 8080;
 
 /**
- * Resolve the health-server port from a raw env value.
- *
- * Robust on purpose: `.env.example` ships `PORT=""`, and `??` would NOT
- * substitute an empty string, so the bot used to crash with
- * ERR_SOCKET_BAD_PORT. Blank, non-numeric, partly-numeric ("3000abc"),
- * or out-of-range values all fall back to the default. We require the
- * whole value to be digits rather than using parseInt, which would
- * silently accept "3000abc" as 3000. Valid range is 1..65535 (0 would
- * make Node pick a random port, useless for a fixed health probe).
- *
- * Exported for unit testing.
+ * Resolve the health-server port from a raw env value, falling back to
+ * the default for anything blank, non-numeric, or out of 1..65535. The
+ * digits-only check (not parseInt) rejects "3000abc"; the blank check
+ * matters because `.env.example` ships PORT="". Exported for tests.
  */
 export function resolvePort(raw: string | undefined): number {
   const trimmed = raw?.trim();
@@ -60,8 +53,7 @@ export function startHealthServer(): void {
       logger.info('Health server listening', { port });
     });
   } catch (err) {
-    // Belt-and-suspenders: the bot must keep running even if the health
-    // server cannot start. The docstring promises this.
+    // The bot must keep running even if the health server can't start.
     logger.warn('Health server could not start, continuing without it', {
       port,
       error: String(err),

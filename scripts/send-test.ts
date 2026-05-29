@@ -1,51 +1,19 @@
 /**
- * Manual test sender (development tool, NOT used by the running bot).
+ * Manual dev sender (NOT used by the running bot). Fires every schedule
+ * once via the same runSchedule the cron uses, in schedules.ts order
+ * (which mirrors a real day), then exits — so you preview exactly what
+ * subscribers see.
  *
- * It fires every schedule once via the SAME `runSchedule` the cron loop
- * uses, then exits. So:
+ * Re-running cleans up the previous run's azkar/poll posts. The opening
+ * banner is sent OUTSIDE that tracking, so banners persist as session
+ * markers — delete them by hand when done.
  *
- *   - You see in the channel exactly what subscribers see for each
- *     schedule (no wrapper, no formatting drift). Each session is
- *     introduced by a short Arabic banner so anyone scrolling the
- *     channel knows the messages below it are dev previews, not real
- *     scheduled posts.
- *   - The delete-previous cleanup runs for the schedules: re-running
- *     `pnpm send-test` wipes the previous run's azkar/poll posts
- *     before posting fresh ones, so no manual cleanup is needed for
- *     them. The BANNER, however, is sent outside that tracking on
- *     purpose, so each test session leaves its own banner in the
- *     channel as a visible marker. Delete old banners by hand when
- *     you're done reviewing.
+ * Cleanup is per-machine: the pointer file (data/last-message-ids.json)
+ * is local, so a test from your laptop and a prod cron fire don't see
+ * each other's posts. Clean cross-machine leftovers by hand.
  *
- * One gotcha — cleanup is per-machine, not per-channel:
- *   The bot tracks what to delete in a small local file
- *   (`data/last-message-ids.json`) on whichever machine ran it. That
- *   file is NOT inside the channel and NOT tied to your credentials.
- *   So even if your laptop's `.env` points at the prod channel with
- *   prod's token, your laptop and the deployed server still keep
- *   separate files, and each side only deletes ids it wrote itself.
- *
- *   In practice: re-running `send-test` on the same machine cleans
- *   up after itself, but a test post from your laptop won't be
- *   cleaned up by a later prod cron fire (and vice versa). For any
- *   cross-machine leftovers, delete them from the channel by hand.
- *
- * ── How to run ────────────────────────────────────────────────────────
- *   1. Make sure `.env` has BOT_TOKEN and CHANNEL_CHAT_ID set, and that
- *      the bot is an admin of the channel with "Post messages" and
- *      "Delete messages" rights (the second matters from the 2nd run
- *      onwards, for cleanup).
- *   2. From the project root:
- *
- *        pnpm send-test
- *
- *      (equivalent to: pnpm exec tsx scripts/send-test.ts)
- *
- * Sends in the order declared by `schedules.ts`, which already mirrors
- * a real day (morning → Friday Kahf → evening azkar → fasting →
- * pre-sleep → poll) so the preview ends on the poll — the same final
- * thing subscribers see, with «سورة المُلك وأذكار النوم» as its last
- * option pointing back up to the pre-sleep message above.
+ * Run: `pnpm send-test`. Needs `.env` (BOT_TOKEN + CHANNEL_CHAT_ID) and
+ * the bot to be a channel admin with "Post messages" + "Delete messages".
  */
 import { Bot, type Context } from 'grammy';
 import { config } from '../src/config';
@@ -59,16 +27,11 @@ const bot = new Bot<Context>(config.botToken);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
-  // Same init the real entry point does. Without it, runSchedule's
-  // delete-previous step has no memory across runs and the script would
-  // just stack duplicates each invocation.
+  // Same init as the real entry point, so cleanup has memory across runs.
   await initState(config.stateFilePath);
 
-  // Preflight: validate token + channel id + bot membership in ONE call
-  // before posting anything. Catches the common misconfig errors (wrong
-  // token, wrong chat id, bot not in channel, or an invite-link slug
-  // pasted as the chat id) with a single clean diagnostic instead of
-  // six identical 400s scrolling past.
+  // Preflight in one call so a bad token / wrong chat id / invite-link
+  // slug fails with one clean diagnostic, not N identical 400s.
   try {
     await bot.api.getChat(config.channelChatId);
   } catch (err) {
@@ -83,13 +46,9 @@ async function main() {
 
   console.log('Sending test content to', config.channelChatId);
 
-  // Session banner. Sent directly via postToChannel (NOT through
-  // runSchedule), so it has no schedule name in the state file and
-  // won't be auto-deleted on re-runs. The banner is meant to persist:
-  // it marks each dev preview session in the channel scrollback so
-  // anyone scrolling past knows the messages below it are tests, not
-  // real scheduled posts. Old banners pile up by design — delete by
-  // hand when you're done.
+  // Session banner, sent directly (not via runSchedule) so it isn't
+  // tracked or auto-deleted — it marks this preview session in the
+  // scrollback. Old banners pile up by design; delete by hand.
   const bannerId = await postToChannel(bot, '🧪 رسائل اختبار للبوت، يمكنك حذفها بعد المعاينة.', {
     scheduleName: 'test-banner',
   });
@@ -100,12 +59,8 @@ async function main() {
   console.log(`  test-banner: message ${bannerId}`);
   await sleep(1500);
 
-  // Bail-on-first-failure for the real schedules too. If the first
-  // schedule fire fails despite the banner having gone through
-  // (something content-specific, or a sudden rate-limit), halt instead
-  // of spamming N failures. After the first success the channel is
-  // proven postable so later per-schedule failures are reported but
-  // don't halt.
+  // Bail on the first failure; once one post succeeds the channel is
+  // proven postable, so later failures are reported but don't halt.
   let postedAtLeastOne = false;
   for (const def of schedules) {
     const id = await runSchedule(bot, def);

@@ -9,53 +9,31 @@ import type { ScheduleDef } from './types';
 export type { ScheduleDef } from './types';
 
 /**
- * ───────────────────────── THE FILE TO EDIT ─────────────────────────
+ * THE FILE TO EDIT. Each entry is one cron rule + what to post:
+ *   kind: 'message' → text (fixed string, or random from an array)
+ *   kind: 'poll'    → the anonymous self-review poll
  *
- * Every entry is one cron rule plus what to post. Two kinds:
+ * `cron` is a 5-field expression in TZ_NAME (default Africa/Cairo).
+ * Day-of-week: 0/7=Sun, 1=Mon, ..., 5=Fri, 6=Sat.
  *
- *   kind: 'message'  → posts text (a fixed string, or random from array)
- *   kind: 'poll'     → sends the anonymous self-review poll
+ * Keep times ≥ 02:00: Cairo springs 00:00→01:00 on the last Friday of
+ * April and node-cron silently drops jobs in that missing hour.
  *
- * `cron` is a standard 5-field expression interpreted in TZ_NAME (.env,
- * default Africa/Cairo). Day-of-week: 0/7 = Sunday, 1 = Monday, ...,
- * 5 = Friday, 6 = Saturday.
+ * Cadence is deliberately calm — what hurts retention is the number of
+ * separate notification moments, not the message count. Related posts
+ * are co-scheduled a minute apart into one "session" (a Friday morning
+ * ping, a nightly bedtime ping), so it's ≤3 interruptions a day.
  *
- * Times are all ≥ 02:00 on purpose: Africa/Cairo springs the clock from
- * 00:00 → 01:00 on the last Friday of April, and node-cron silently
- * drops jobs scheduled inside that missing hour. Keep new schedules at
- * 02:00 or later if TZ_NAME observes DST. See CLAUDE.md.
- *
- * Cadence is intentionally calm. What hurts retention is not the
- * message count but the number of *separate* notification moments: too
- * many → people mute → a muted channel benefits no one. So related
- * posts are CO-SCHEDULED into one tight window (offset by a minute so
- * the arrival order is deterministic) and read as a single "session":
- *
- *   • Friday morning  → morning azkar + Friday sunan (one morning ping)
- *   • Every night      → pre-sleep + poll           (one bedtime ping)
- *   • Sun/Wed night    → + fasting reminder         (folded into the
- *                                                    same bedtime ping)
- *
- * That is ≤3 interruption moments/day (morning, late afternoon, night)
- * instead of 4–5 scattered ones, with no merged content and no
- * branching logic — a Telegram poll cannot live inside a text message,
- * and conditional content would break the static-content design.
- *
- * Within the bedtime window the poll fires LAST: fasting → pre-sleep
- * → poll. The poll's options include «سورة المُلك وأذكار النوم» as
- * the last item, so a user who opens the channel sees the poll at the
- * bottom (newest), notices the gap, and scrolls UP to the pre-sleep
- * message to read/act on the dhikr. The poll is a self-review
- * checklist that surfaces the azkar, not a competitor to them.
+ * In the bedtime window the poll fires LAST (fasting → pre-sleep → poll),
+ * so it sits newest at the bottom; its last option «سورة المُلك وأذكار
+ * النوم» points the reader up to the pre-sleep message to act on.
  */
 export const schedules: ScheduleDef[] = [
   {
     name: 'morning_azkar',
     kind: 'message',
-    // 05:30 Cairo. Picked so the reminder lands INSIDE the preferred
-    // Fajr→sunrise window in every season — Cairo sunrise swings from
-    // ~5:55 (June, DST) to ~6:45 (December), and 05:30 sits inside
-    // both. 06:00 (the old time) drifts ~5 min past sunrise in summer.
+    // 05:30 Cairo: inside the Fajr→sunrise window all year (sunrise
+    // swings ~5:55 June to ~6:45 December). 06:00 drifts past it in summer.
     cron: '30 5 * * *',
     content: morningAzkar,
     description: 'أذكار الصباح، كل يوم 5:30 ص (داخل وقت الذكر بين الفجر وطلوع الشمس طوال السنة).',
@@ -63,10 +41,8 @@ export const schedules: ScheduleDef[] = [
   {
     name: 'friday_sunnah',
     kind: 'message',
-    // 05:32 Cairo. Co-scheduled 2 min after morning_azkar (single
-    // morning ping). Kahf's recommended window is Maghrib-Thu through
-    // Maghrib-Fri, so exact morning time is forgiving; what matters
-    // is the bundle with the morning azkar arrival.
+    // 05:32 Cairo, 2 min after morning_azkar (one morning ping). Exact
+    // time is forgiving; what matters is bundling with the morning azkar.
     cron: '32 5 * * 5',
     content: fridaySunnah,
     description:
@@ -75,14 +51,10 @@ export const schedules: ScheduleDef[] = [
   {
     name: 'evening_azkar',
     kind: 'message',
-    // 17:00 Cairo. الأفضل (الأصيل) أن تُقرأ بين العصر والمغرب، وعند
-    // ابن باز وابن عثيمين الأمر واسع ويصحّ ما بعد المغرب أيضًا. الوقت
-    // الثابت 17:00 يبقى داخل النافذة الشرعية المعتبَرة طوال السنة في
-    // القاهرة: مارس–أكتوبر يقع داخل (العصر→المغرب)، ونوفمبر–فبراير
-    // يقع بعد المغرب بقليل (الأمر واسع). لا انقسام موسمي ولا تتبّع
-    // للتوقيت الصيفي. النصّ نفسه يبيّن للقارئ قراءتها في نافذة بلده،
-    // فالبوت تذكيرٌ لا أذان. لا تُرجِعها إلى 16:30: ذاك يقع قبل العصر
-    // في الصيف (العصر بالقاهرة يبلغ ~17:00 في الانقلاب الصيفي).
+    // 17:00 Cairo: best read between Asr and Maghrib, but the window is
+    // broad (Ibn Baz / Ibn Uthaymin allow after Maghrib too). 17:00 stays
+    // valid year-round; don't move it to 16:30 — that falls before Asr in
+    // summer (Cairo Asr reaches ~17:00 at the solstice).
     cron: '0 17 * * *',
     content: eveningAzkar,
     description: 'أذكار المساء، كل يوم 5:00 م. الأفضل قراءتها بين العصر والمغرب.',
@@ -106,16 +78,12 @@ export const schedules: ScheduleDef[] = [
     name: 'night_review_poll',
     kind: 'poll',
     cron: '45 21 * * *',
-    // Factory, not a fixed spec: the spec is rebuilt each fire so
-    // Monday/Thursday nights (in TZ_NAME) get an extra «صيام الاثنين/
-    // الخميس» option. One schedule, one state key → replace-on-next-
-    // fire (keepLast: 1) still works across day-types. See poll.ts.
+    // Factory, rebuilt each fire so Mon/Thu nights add a fasting option
+    // (see poll.ts), while one schedule + one state key keeps cleanup simple.
     poll: () => buildNightReviewPoll(),
-    // Replace-on-next-fire (same rule as messages): when tonight's poll
-    // fires, last night's is deleted. Polls default to 0 (untracked), so
-    // this single line is what opts the poll into cleanup. The channel
-    // therefore shows exactly one live poll — no stack of identical
-    // questions burying the welcome / pinned intro for new joiners.
+    // Opts the poll into replace-on-next-fire (polls default to 0 =
+    // untracked), so exactly one live poll shows — no stack of identical
+    // questions burying the pinned welcome.
     keepLast: 1,
     description:
       'استبيان مراجعة الليلة (مجهول)، كل يوم 9:45 م — آخر منشور في النافذة، يدلّ المُتَخَلِّف عن ذكرٍ إلى رسالة ما قبل النوم فوقَه. تُحذَف نسخة الليلة السابقة عند نشر الجديدة.',

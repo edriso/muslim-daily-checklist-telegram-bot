@@ -4,16 +4,10 @@ import { logger } from './logger';
 import type { PollSpec } from '../types';
 
 /**
- * Send one plain-text message to the configured channel.
- *
- * No `parse_mode` is used on purpose. The content is Arabic du'a / Quran
- * references that frequently contain characters Markdown/HTML would
- * choke on (`*`, `_`, `(`, `)`, `<`, ...). Plain text renders Arabic +
- * emoji perfectly and removes an entire class of "Telegram 400" bugs.
- * This is a deliberate simplicity-over-formatting trade. See CLAUDE.md.
- *
- * Returns the message_id on success, or null on failure (logged, not
- * thrown, so a transient Telegram glitch never crashes the cron tick).
+ * Send one plain-text message to the channel. No parse_mode on purpose:
+ * Arabic du'a/Quran text contains chars Markdown/HTML would 400 on (see
+ * CLAUDE.md). Returns the message_id, or null on failure (logged, not
+ * thrown, so a transient glitch never crashes the cron tick).
  */
 export async function postToChannel(
   bot: Bot<Context>,
@@ -37,29 +31,11 @@ export async function postToChannel(
 }
 
 /**
- * Delete one previously-posted message from the channel.
- *
- * Used by the replace-on-next-fire flow in `runSchedule`: when a message
- * schedule fires for the Nth time, the new copy is posted first and then
- * the (N-1)th message id is deleted, so the channel keeps exactly one
- * live copy per schedule and never accumulates dupes of repeating azkar.
- *
- * Notes / why no throws
- * ─────────────────────
- * Failures here are *non-fatal by design*. The most common cause is "the
- * admin already deleted that message manually" — Telegram returns 400,
- * we log warn, and move on. A transient network error is the same: a
- * leaked old message is purely cosmetic and self-bounded.
- *
- * Admin right required
- * ────────────────────
- * In a channel the bot needs the `can_delete_messages` admin right —
- * note this is in addition to "Post messages". With it, the 48-hour
- * deleteMessage cap does not apply, so the bot can still delete a
- * weekly schedule's previous post 7 days later (e.g. Friday sunnah).
- * See CLAUDE.md and DEPLOY.md.
- *
- * Returns true on success, false on any failure (logged, not thrown).
+ * Delete one previously-posted message (the replace-on-next-fire cleanup
+ * in runSchedule). Non-fatal by design: the usual failure is "an admin
+ * already deleted it by hand" — log and move on. Needs the bot's
+ * `can_delete_messages` admin right, which also lifts Telegram's 48h
+ * delete cap (matters for the weekly Friday post). Returns true/false.
  */
 export async function deleteChannelMessage(
   bot: Bot<Context>,
@@ -74,8 +50,8 @@ export async function deleteChannelMessage(
     });
     return true;
   } catch (err) {
-    // warn (not error): a missing previous message is the routine case
-    // when an admin tidied the channel by hand. Don't shout for it.
+    // warn, not error: a missing previous message is routine (an admin
+    // tidied the channel by hand).
     logger.warn('Failed to delete previous channel message', {
       scheduleName: meta.scheduleName,
       messageId,
@@ -94,38 +70,22 @@ const RLI = '\u2067'; // RIGHT-TO-LEFT ISOLATE
 const PDI = '\u2069'; // POP DIRECTIONAL ISOLATE
 
 /**
- * Wrap one RTL line so Telegram cannot mis-order it in the poll-results
- * view, WITHOUT using parse_mode.
- *
- * Poll text here is plain (this project forbids parse_mode — Arabic
- * du'a contains `* _ ( ) <` that HTML/Markdown 400s on, see CLAUDE.md),
- * so the HTML `dir="rtl"` trick is unavailable. The standards-correct
- * plain-text equivalent is the bidi *isolate* pair: RLI pins the line's
- * base direction to right-to-left, PDI closes the isolated run. Unlike
- * a lone prepended RLM (which W3C calls a "goto-like" hack), the
- * isolate also walls the line off from the vote %/count Telegram
- * concatenates around each option — that surrounding number is exactly
- * what was rendering on top of the (leading) emoji. Content keeps the
- * emoji at the *end* of the string too (see content/poll.ts); the two
- * together are the robust fix. Telegram still has its own open RTL poll
- * bugs we can't reach, but this removes the collision we control.
+ * Wrap an RTL line in a Unicode bidi isolate (RLI…PDI). With no
+ * parse_mode the HTML dir="rtl" trick is unavailable; the isolate pins
+ * the line right-to-left and walls it off from the vote %/count Telegram
+ * appends to each poll option (which was rendering over a leading emoji).
+ * Pairs with keeping the emoji at the END of each string (content/poll.ts).
  */
 export function rtlIsolate(text: string): string {
   return `${RLI}${text}${PDI}`;
 }
 
 /**
- * Send one anonymous poll to the channel (the nightly self-review).
- *
- * Anonymous + multiple-answers by default: members tick every deed they
- * did, Telegram shows the aggregate percentages to everyone, and nobody
- * — including this bot — learns who voted. No database, no riya.
- *
- * `close_date` is derived from `closeAfterHours` and clamped into
- * Telegram's accepted range, so a bad config can never make the API
- * reject the poll.
- *
- * Returns the poll message_id, or null on failure (logged, not thrown).
+ * Send the nightly anonymous self-review poll. Anonymous + multi-answer
+ * by default: members tick the deeds they did, everyone sees aggregate
+ * percentages, nobody (not even the bot) learns who voted — no DB, no
+ * riya. close_date is clamped to Telegram's accepted range so bad config
+ * can't 400 the API. Returns the poll message_id, or null on failure.
  */
 export async function sendPollToChannel(
   bot: Bot<Context>,
@@ -139,10 +99,8 @@ export async function sendPollToChannel(
   const clampedHours = Math.min(Math.max(requestedHours, MIN_CLOSE_HOURS), MAX_CLOSE_HOURS);
   const closeDate = Math.floor(Date.now() / 1000) + Math.round(clampedHours * 3600);
 
-  // Bot API 7.3+ expects an array of InputPollOption objects, not
-  // plain strings. Each option (and the question) is bidi-isolated so
-  // Telegram's results view can't render the emoji on top of the vote
-  // numbers — see rtlIsolate above and content/poll.ts.
+  // Bot API 7.3+ wants InputPollOption objects, not strings. Each option
+  // and the question is bidi-isolated (see rtlIsolate).
   const options = spec.options.map((text) => ({ text: rtlIsolate(text) }));
 
   try {

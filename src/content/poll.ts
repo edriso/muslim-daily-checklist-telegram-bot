@@ -2,53 +2,33 @@ import type { PollSpec } from '../types';
 import { config } from '../config';
 
 /**
- * استبيان مراجعة الليلة — تصويت مجهول، اختيارات متعددة.
+ * The nightly self-review poll: anonymous + multiple-answer, so nobody
+ * (not even the bot) sees who voted — only aggregate percentages. No DB,
+ * no riya.
  *
- * مجهول تمامًا: لا أحد (ولا البوت نفسه) يرى مَن صوّت — فقط النِّسَب
- * المجمّعة. هذا يحفظ الإخلاص (لا رياء) ولا يحتاج قاعدة بيانات.
+ * Built per fire by buildNightReviewPoll: a single BASE_OPTIONS list with
+ * the day's extras spliced in from OPTIONS_BY_DAY (keyed by weekday in
+ * TZ_NAME). Adding a day-specific list later (e.g. Friday) is one entry
+ * in that table — no branching in the function, and one schedule + one
+ * state key keeps replace-on-next-fire intact.
  *
- * حدود تيليجرام: السؤال ≤ 300 حرفًا، الخيارات من 2 إلى 10، كلّ خيار
- * ≤ 100 حرفًا. الإطار الروحي: «أحبُّ الأعمالِ إلى اللهِ أدومُها وإن قلّ».
+ * Telegram limits: question ≤300 chars, 2..10 options, each ≤100. Keep
+ * the emoji at the END of each string (a leading emoji collides with the
+ * vote %/count Telegram appends) and leave a little margin — rtlIsolate
+ * in lib/post.ts adds 2 chars.
  *
- * الأيقونة في *نهاية* النص لا في بدايته: النص عربي (اتجاهه من اليمين
- * لليسار)، فلو بدأ بأيقونة لاصطدمت بصريًّا بنسبة التصويت التي يلصقها
- * تيليجرام في صفحة النتائج. وضعها في النهاية يبعدها عن الأرقام. أمّا
- * عزل الاتجاه فيُضاف آليًّا في lib/post.ts (انظر rtlIsolate هناك)،
- * وهو يضيف حرفين خفيّين لكلّ نصّ؛ فاترك هامشًا تحت حدّ الـ100.
- *
- * القائمة الأساسية ٩ بنودٍ — أقلُّ من حدّ تيليجرام (١٠) عمدًا تخفيفًا
- * لثِقل استبيانٍ يوميّ. ليلتَي الاثنين والخميس يُضاف بندُ «صيام
- * اليوم» بين عبادات النهار وعنقود ما قبل النوم (خشوع الصلاة ← الصيام
- * ← الاستغفار)، فالصيامُ عبادةُ يومٍ كاملٍ يحسُن وَسْمُها قبل بدء
- * مراجعة الليل، فيبلغ المجموع ١٠ — الحدّ الأقصى. تُولَّد القائمة لحظةَ
- * الإرسال عبر buildNightReviewPoll: قائمةٌ أساسيّةٌ واحدة (BASE_OPTIONS)
- * تُحقَن فيها بنودُ اليوم من جدولٍ مفتاحُه اليومُ في توقيت TZ_NAME
- * (OPTIONS_BY_DAY) — فإضافةُ قائمةٍ خاصّةٍ لاحقًا (الجمعة مثلًا) سطرٌ
- * واحدٌ في ذلك الجدول لا تفرُّعٌ في الدالّة. ولا يُغيَّر مفتاحُ الجدولة،
- * فيبقى استبدالُ النشر التالي (keepLast: 1) يعمل بمفتاح state واحد. قيام الليل أُفرِد ببندٍ مستقلٍّ (لا يُدمَج
- * مع الضحى) لأنّه عبادةٌ مستقلّةٌ بزمنها وأجرها ونيّتها، والدمج
- * يُلبِّس التأشير. وكلتا النافلتين صِيغتا «ولو ركعتين» على هَدْي
- * «أحبُّ الأعمالِ إلى اللهِ أدومُها وإن قلّ» — تشجيعًا للمداومة لا
- * للمثاليّة. تمزج ثلاثة أبعاد قصدًا: شعائر (أذكار/قرآن/سنن)،
- * وجودةَ الفرائض (الفجر في وقته، الخشوع)، وأخلاقَ القلب (حفظ اللسان
- * واللِّين وطول البال، الاستغفار) — فالمراجعة تربية لا عدّ. وكلّ بند
- * يجب أن يكون صياغةَ *جهدٍ صادقٍ يُؤشَّر عليه بلا كذبٍ ولا إحباط*، لا
- * حالةً مثاليّةً نهائيّة: فالخشوع «اجتهادٌ وطمأنينةٌ وأذكارٌ بعد الصلاة» لا إتقانٌ تامّ،
- * والحِلم «لِينٌ وطول بال» لا انعدامُ غضب (الشديد مَن يملك نفسه عند
- * الغضب). دُمِج «المُلك + أذكار النوم» (يُؤدَّيان في جِلسةٍ واحدةٍ قبل
- * النوم، فالتأشير صادق)، و«أذكار الاستيقاظ + الفجر في وقته» (عنقودُ
- * الصباح المتتابع: استيقاظٌ ← ذكرٌ ← وضوءٌ ← صلاة)، و«أذكار الصباح
- * + المساء» (تبسيطٌ مقصود رغم تباعد وقتيهما؛ يتعذّر معه فصلُ مَن أدّى
- * أحدهما — مفاضلةٌ قُبِلت عمدًا).
+ * Wording principle: every option is an HONEST effort you can tick
+ * without lying or feeling defeated («ولو ركعتين», «أدومها وإن قلّ») —
+ * not a claim of perfection. Items that are genuinely done in one sitting
+ * are merged; قيام الليل is kept separate from الضحى (distinct worship).
  */
 
 const QUESTION =
   'حاسِب نفسك قبل النوم: بمَ وفّقك الله اليوم؟ (سرّي مجهول؛ أشِّر بصدقٍ على ما أدّيت، وانوِ بمشاركتك تشجيعَ غيرك والتنافسَ في الخير) 📋';
 
-// القائمة الأساسية («العامّة») — تُعرَض كلّ ليلة بهذا الترتيب المقصود
-// (انظر رأس الملف). مصدرٌ واحدٌ للحقيقة: الليالي الخاصّة (الاثنين/
-// الخميس، ومستقبلًا الجمعة مثلًا) تُدرِج بنودها فيها ولا تعيد تعريفها،
-// فلا تتكرّر القائمة العامّة ولا تتفرّع نُسَخٌ يصعب إبقاؤها متّسقة.
+// The general list shown every night, in this deliberate order (see
+// header). Single source of truth: day-specific nights inject extras
+// into it via OPTIONS_BY_DAY rather than redefining the list.
 const BASE_OPTIONS: readonly string[] = [
   'أذكار الاستيقاظ ثم صلاة الفجر في وقتها ⏰',
   'أذكار الصباح والمساء 🛡️',
@@ -61,43 +41,41 @@ const BASE_OPTIONS: readonly string[] = [
   'سورة المُلك وأذكار النوم 🌙',
 ];
 
-/** بندٌ إضافيٌّ يُحقَن في القائمة الأساسية في ليلةٍ بعينها. */
+/** An extra option spliced into the base list on a given night. */
 interface DayOption {
-  /** نصّ الخيار (الأيقونة في النهاية؛ أبقِ هامشًا تحت ١٠٠ حرف). */
+  /** Option text (emoji at the END; stay under 100 chars). */
   option: string;
   /**
-   * يُدرَج مباشرةً *بعد* البند الأساسيّ المطابق لهذا النصّ، فينزل
-   * البندُ الخاصّ في موضعه المقصود من الترتيب لا في آخر القائمة. اتركه
-   * (undefined) للإلحاق في النهاية. إن لم يُوجَد البندُ المرجعيّ يُرمى
-   * خطأٌ — فالخطأُ المطبعيّ يُسقِط الاختبارات ولا يَشحن استبيانًا
-   * مختلَّ الترتيب.
+   * Insert right AFTER the base option equal to this text, so the extra
+   * lands at its intended spot in the order. Omit to append. An unknown
+   * anchor throws — a typo fails the tests instead of shipping a
+   * misordered poll.
    */
   after?: string;
 }
 
-// نقطة حقن الصيام: بعد «خشوع الصلاة» (آخر عبادات النهار) وقبل عنقود
-// ما قبل النوم (استغفار ← قيام ← مُلك/نوم).
+// Insert fasting after خشوع الصلاة (last of the day's worship), before
+// the pre-sleep cluster.
 const FASTING_ANCHOR =
   'اجتهدت في خشوع صلاتي وطمأنينتها، وقُلت أذكار ما بعد الصلاة المفروضة 🕌';
 
-// اليوم في توقيت TZ_NAME (0=الأحد..6=السبت) ← بنودٌ تُضاف تلك الليلة.
-// هذه «نقطة التحرير» لأيّ تنويعٍ يوميّ: أضِف مفتاحًا (مثلًا 5 لقائمة
-// الجمعة) وبنودَه هنا — ولا تحتاج buildNightReviewPoll تعديلًا.
+// Weekday in TZ_NAME (0=Sun..6=Sat) → options to add that night. THE
+// EDIT POINT for day variants: add a key (e.g. 5 for a Friday list) here;
+// buildNightReviewPoll needs no change.
 const OPTIONS_BY_DAY: Record<number, readonly DayOption[]> = {
-  1: [{ option: 'صيام الاثنين 🌒', after: FASTING_ANCHOR }], // الاثنين
-  4: [{ option: 'صيام الخميس 🌒', after: FASTING_ANCHOR }], // الخميس
+  1: [{ option: 'صيام الاثنين 🌒', after: FASTING_ANCHOR }], // Monday
+  4: [{ option: 'صيام الخميس 🌒', after: FASTING_ANCHOR }], // Thursday
 };
 
-/** اليوم في توقيت TZ_NAME (0=Sun..6=Sat). نَستخدم Intl لا
- *  Date.getDay() حتّى يكون «الإثنين» إثنينَ القاهرة، لا إثنين خادم
- *  العمل (UTC غالبًا) عند منتصف الليل. */
+/** Weekday in `tz` (0=Sun..6=Sat) via Intl, not Date.getDay(), so
+ *  "Monday" means Monday in TZ_NAME and not on the host (usually UTC). */
 function weekdayInTz(now: Date, tz: string): number {
   const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
   const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return map[wd] ?? 0;
 }
 
-/** حقن بنود اليوم في القائمة الأساسية، كلٌّ في موضعه (انظر DayOption). */
+/** Splice each day-extra into the base list at its anchor (see DayOption). */
 function applyDayOptions(base: readonly string[], extras: readonly DayOption[]): string[] {
   const options = [...base];
   for (const { option, after } of extras) {
@@ -115,9 +93,8 @@ function applyDayOptions(base: readonly string[], extras: readonly DayOption[]):
 }
 
 /**
- * بناء استبيان المراجعة لليلة بعينها. الافتراضُ «الآن» وتوقيتُ
- * config.timezone، فيكفي استدعاءٌ بلا وسائط من scheduler. الوسائط
- * مكشوفة للاختبار فقط.
+ * Build the poll for a given night. Defaults to now + config.timezone,
+ * so the scheduler calls it with no args; the args exist for tests.
  */
 export function buildNightReviewPoll(
   now: Date = new Date(),

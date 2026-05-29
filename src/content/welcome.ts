@@ -1,17 +1,10 @@
 /**
- * Channel welcome message. Pinned to the channel as the first thing new
- * joiners see. Posted (or updated in place) manually via
- * `scripts/post-welcome.ts`, NOT by the running bot's cron loop.
+ * The pinned channel welcome. Posted / edited manually via
+ * `scripts/post-welcome.ts`, not by the cron loop. Plain text (no
+ * parse_mode), ≤4096 chars.
  *
- * Plain text — no parse_mode (same project-wide rule as the dhikr
- * messages: Arabic + emoji + punctuation render perfectly without
- * Markdown/HTML escaping). Stays ≤ 4096 chars (Telegram single-message
- * limit).
- *
- * If schedule times in `schedules.ts` change, update the times listed
- * here too. There is no auto-sync — the welcome is read once per joiner
- * and pinned, so a stale time here is visible to everyone for a long
- * time. Re-post / re-edit via `pnpm post-welcome` after any change.
+ * No auto-sync: if schedule times in schedules.ts change, update the
+ * times listed below and re-run `pnpm post-welcome`.
  */
 export const welcomeMessage = `السلام عليكم ورحمة الله وبركاته 🌿
 

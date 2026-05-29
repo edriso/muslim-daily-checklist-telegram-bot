@@ -1,35 +1,16 @@
 /**
- * Manual welcome-message updater (development tool, NOT used by the
- * running bot's cron loop).
+ * Manual welcome updater (NOT used by the cron loop). The welcome text
+ * lives in src/content/welcome.ts; edit it, then run this to push it.
  *
- * The welcome lives in `src/content/welcome.ts`. Edit that file, then
- * run this script to push the change to the channel.
+ *   pnpm post-welcome              → post a NEW message (first setup);
+ *                                    pin it by hand and keep the id.
+ *   pnpm post-welcome <message_id> → edit that message in place (pin
+ *                                    stays, no notification). Only works
+ *                                    on a message this bot sent itself.
  *
- * Two modes:
- *
- *   pnpm post-welcome
- *     Posts a NEW message to the channel. Use this the first time you
- *     set up the channel. The script prints the message_id; pin that
- *     message manually in Telegram (channel → message → ⋮ → Pin), and
- *     keep the id somewhere so future updates can edit in place.
- *
- *   pnpm post-welcome <message_id>
- *     EDITS the existing message in place. The pin stays, no new
- *     notification fires. The bot can only edit messages it sent
- *     itself, so this only works if the original welcome was posted
- *     via this script (or via `bot.api.sendMessage` from any code
- *     using the same bot token).
- *
- * ── Why not auto-pin?
- *   Pinning needs the channel admin right "Pin messages", and pinning
- *   a brand-new edit re-fires the pin notification every time. So we
- *   keep pinning a one-shot manual step and use edit-in-place for
- *   updates — silent, no spam.
- *
- * ── Preflight
- *   Same one-call check as `send-test.ts`: `bot.api.getChat()` to fail
- *   fast on bad token / wrong chat id / invite-link slug pasted as id,
- *   instead of stacking a confusing post-time error.
+ * Pinning stays manual on purpose: re-pinning fires a notification every
+ * time, so edit-in-place keeps updates silent. Preflights with getChat()
+ * to fail fast on a bad token / chat id.
  */
 import { Bot, type Context } from 'grammy';
 import { config } from '../src/config';

@@ -11,57 +11,28 @@ import { getMessageIds, setMessageIds } from './lib/state';
 const tasks: ScheduledTask[] = [];
 
 /**
- * Run one schedule definition and return the resulting message_id (or
- * null if nothing was posted). Dispatches on `kind`:
+ * Run one schedule and return the new message_id (or null if nothing
+ * posted). Dispatches on `kind` (message → sendMessage, poll → sendPoll).
  *
- *   - 'message' → pick content, post via sendMessage.
- *   - 'poll'    → send the anonymous self-review poll via sendPoll.
+ * Ring buffer: each schedule keeps its last `keepLast` posts live
+ * (message default 1, poll default 0 = untracked; see types.ts). Order is
+ * post-then-trim so the channel is never briefly empty. A failed post
+ * leaves state untouched (next fire retries the cleanup); a failed delete
+ * still advances state (a stale orphan is benign). Anything not posted
+ * here (manual welcome, other admins) is never tracked, never deleted.
  *
- * Ring buffer (replace-on-next-fire generalised)
- * ──────────────────────────────────────────────
- * Each schedule has an effective `keepLast` (see types.ts):
- *
- *   message default = 1   → exactly one live copy (the old azkar rule).
- *   poll default    = 0   → never track, never delete (historic rule).
- *   N > 1           → keep the latest N (a "tonight + previous nights"
- *                     window — supported but currently unused in prod).
- *
- * After every successful post the new id is appended to that schedule's
- * tracked list, then any ids beyond `keepLast` (oldest first) are
- * deleted from Telegram. The nightly poll opts in with `keepLast: 1`,
- * which gives the same replace-on-next-fire behavior as messages:
- * tonight's poll fires, last night's gets deleted.
- *
- * Order matters: post FIRST, then trim. Never the other way around — a
- * network blip between "delete old" and "post new" would briefly leave
- * the channel empty for that schedule. Post-then-trim means the channel
- * always shows *something* for this schedule.
- *
- * Failed posts leave state untouched, so the next fire will still try to
- * clean up the same previous ids. Failed deletes still advance state
- * (we did our best; a stale orphan is benign — see
- * `deleteChannelMessage`).
- *
- * Any message NOT posted via this code path (manual welcome / pinned
- * intro, other admins) is never tracked here and therefore never
- * deleted. The state file's per-schedule keying makes this fall out for
- * free, no allowlist needed.
- *
- * Exported so `/admin_run` fires the exact same code path manually.
+ * Exported so /admin_run fires the exact same path. See CLAUDE.md.
  */
 export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
   const keepLast = effectiveKeepLast(def);
 
   const newId = await sendForKind(bot, def);
   if (newId === null) {
-    // Post failed. Keep tracked ids intact so the next fire can still
-    // attempt the cleanup it would have done today.
-    return null;
+    return null; // post failed — keep tracked ids so the next fire retries cleanup
   }
 
   if (keepLast === 0) {
-    // Not tracked — historic poll behavior, or an opt-out one-off.
-    return newId;
+    return newId; // not tracked (untracked poll, or an opt-out one-off)
   }
 
   const previous = getMessageIds(def.name);
@@ -70,19 +41,15 @@ export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<
   await setMessageIds(def.name, next);
 
   for (const oldId of toDelete) {
-    if (oldId === newId) continue; // belt-and-suspenders; never delete what we just posted.
-    // Best-effort. Failure is logged and swallowed — see deleteChannelMessage.
+    if (oldId === newId) continue; // never delete what we just posted
     await deleteChannelMessage(bot, oldId, { scheduleName: def.name });
   }
 
   return newId;
 }
 
-/**
- * Resolve `def.keepLast` against the kind-default. Negative values are
- * clamped to 0 (treated as "do not track") rather than throwing — a
- * config typo must not break the cron tick.
- */
+/** Resolve keepLast against the kind-default; clamp bad values to 0 so a
+ *  config typo can't break the cron tick. */
 function effectiveKeepLast(def: ScheduleDef): number {
   if (typeof def.keepLast === 'number' && Number.isInteger(def.keepLast) && def.keepLast >= 0) {
     return def.keepLast;
@@ -93,8 +60,7 @@ function effectiveKeepLast(def: ScheduleDef): number {
 /** Dispatch on kind. Returns the new message_id or null on failure. */
 async function sendForKind(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
   if (def.kind === 'poll') {
-    // `poll` may be a fixed spec or a factory rebuilt per fire (so the
-    // night review can vary by day-of-week — see content/poll.ts).
+    // `poll` may be a factory rebuilt per fire (day-of-week variants).
     const spec = typeof def.poll === 'function' ? def.poll() : def.poll;
     return sendPollToChannel(bot, spec, { scheduleName: def.name });
   }
@@ -106,11 +72,8 @@ async function sendForKind(bot: Bot<Context>, def: ScheduleDef): Promise<number 
   return postToChannel(bot, text, { scheduleName: def.name });
 }
 
-/**
- * Wrap a schedule callback with logging and error containment. node-cron
- * does not swallow rejected promises cleanly across versions, so we
- * catch here as belt-and-suspenders.
- */
+/** Wrap a schedule run with logging + error containment (node-cron does
+ *  not reliably catch rejected promises across versions). */
 function trackedJob(bot: Bot<Context>, def: ScheduleDef): () => Promise<void> {
   return async () => {
     logger.info('Schedule firing', { name: def.name, kind: def.kind });
@@ -123,9 +86,8 @@ function trackedJob(bot: Bot<Context>, def: ScheduleDef): () => Promise<void> {
 }
 
 /**
- * Register every schedule from src/schedules.ts with node-cron. An
- * invalid cron expression is logged and skipped; the others still run.
- * Returns the number successfully registered.
+ * Register every schedule with node-cron. An invalid cron is logged and
+ * skipped; the rest still run. Returns the count registered.
  */
 export function startScheduler(bot: Bot<Context>): number {
   for (const def of schedules) {

@@ -7,31 +7,18 @@
 
 /** A single anonymous poll definition (the nightly self-review). */
 export interface PollSpec {
-  /**
-   * The poll question. Telegram allows up to 300 chars; we cap at 255
-   * in tests to keep a safe margin across clients.
-   */
+  /** Telegram allows ≤300 chars; tests cap at 255 for a safe margin. */
   question: string;
-  /**
-   * 2..10 answer options, each 1..100 chars. Sent to Telegram as
-   * InputPollOption objects (Bot API 7.3+ changed this from plain
-   * strings); the conversion happens in lib/post.ts.
-   */
+  /** 2..10 options, each ≤100 chars. lib/post.ts maps these to the
+   *  InputPollOption objects Bot API 7.3+ expects. */
   options: readonly string[];
-  /**
-   * Anonymous by default. Anonymous = nobody (not even this bot) sees
-   * who voted, only the aggregate percentages. Keep this true: it is
-   * the whole point (no riya, no identity, no database).
-   */
+  /** Anonymous by default — nobody (not even the bot) sees who voted,
+   *  only aggregate percentages. Keep true: it's the whole point. */
   isAnonymous?: boolean;
   /** Allow ticking several deeds in one vote. Defaults to true. */
   allowsMultipleAnswers?: boolean;
-  /**
-   * Hours until Telegram auto-closes the poll. Telegram requires the
-   * close time to be 5 seconds .. ~30 days in the future, so this must
-   * be within (5/3600 .. 730) hours. Default 22h: closes well before
-   * the next day's poll opens.
-   */
+  /** Hours until Telegram auto-closes the poll. Clamped to Telegram's
+   *  5s..~30d window in lib/post.ts. Default 22h. */
   closeAfterHours?: number;
 }
 
@@ -46,18 +33,12 @@ interface BaseSchedule {
   /** Human note shown in `/admin_health`. Optional. */
   description?: string;
   /**
-   * Ring-buffer size: how many of this schedule's past posts to keep
-   * visible in the channel. After every fire, posts beyond this count
-   * (oldest first) are deleted from Telegram.
-   *
-   *   - omit (undefined) ⇒
-   *       • for `kind: 'message'`: defaults to 1 (replace-on-next-fire).
-   *       • for `kind: 'poll'`   : defaults to 0 (never tracked, never
-   *         deleted — historic behavior).
-   *   - `0` ⇒ never track, never delete (one-off announcements).
-   *   - `1` ⇒ always exactly one live copy.
-   *   - `N > 1` ⇒ keep the latest N (e.g. `2` on the nightly poll shows
-   *     tonight's + yesterday's, drops the day-before's on fire).
+   * Ring-buffer size: how many of this schedule's past posts stay live.
+   * After each fire, older posts (oldest first) are deleted.
+   *   - omit ⇒ 1 for messages (replace-on-next-fire), 0 for polls.
+   *   - 0 ⇒ never track, never delete (one-off announcements).
+   *   - 1 ⇒ exactly one live copy.
+   *   - N>1 ⇒ keep the latest N.
    */
   keepLast?: number;
 }
@@ -69,11 +50,10 @@ export interface MessageSchedule extends BaseSchedule {
   content: string | readonly string[];
 }
 
-/** Sends one anonymous poll. `poll` may be a fixed spec, or a factory
- *  called at fire time so the question/options can vary by day-of-week
- *  (e.g. the nightly review adds «صيام الاثنين/الخميس» on Mon/Thu).
- *  Keeping ONE schedule + a factory — rather than 3 cron entries — is
- *  what lets the replace-on-next-fire cleanup track one stable state key. */
+/** Sends one anonymous poll. `poll` may be a fixed spec or a factory
+ *  called at fire time, so the night review can vary by day-of-week
+ *  (Mon/Thu add a fasting option) while one schedule + one state key
+ *  keeps the replace-on-next-fire cleanup intact. See content/poll.ts. */
 export interface PollSchedule extends BaseSchedule {
   kind: 'poll';
   poll: PollSpec | (() => PollSpec);
