@@ -56,8 +56,7 @@ interface DayOption {
 
 // Insert fasting after خشوع الصلاة (last of the day's worship), before
 // the pre-sleep cluster.
-const FASTING_ANCHOR =
-  'اجتهدت في خشوع صلاتي وطمأنينتها، وقُلت أذكار ما بعد الصلاة المفروضة 🕌';
+const FASTING_ANCHOR = 'اجتهدت في خشوع صلاتي وطمأنينتها، وقُلت أذكار ما بعد الصلاة المفروضة 🕌';
 
 // Weekday in TZ_NAME (0=Sun..6=Sat) → options to add that night. THE
 // EDIT POINT for day variants: add a key (e.g. 5 for a Friday list) here;
