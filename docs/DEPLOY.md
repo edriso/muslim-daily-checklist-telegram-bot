@@ -87,12 +87,65 @@ hand to confirm the channel receives it, e.g.:
 /admin_run night_review_poll
 ```
 
-## Fly.io
+## Docker Compose on a VPS (primary deploy)
 
-There is a `Dockerfile` and `fly.toml` in the repo root, plus a
-full walkthrough in **`FLYIO.md`** at the repo root (first deploy,
-secrets, day-to-day commands, triage, rollback). Read that file
-for everything Fly-specific. The short version:
+This is how the bot runs in production: a Docker container on a small
+VPS, alongside other bots, managed by one Docker Compose file. Works on
+any provider (Hetzner, etc.); nothing here is provider-specific.
+
+On the server (with Docker + the `compose` plugin installed), clone the
+repo and create its `.env`:
+
+```bash
+mkdir -p /opt/bots/telegram
+git clone https://github.com/edriso/zaaduna.git /opt/bots/telegram/zaaduna
+cp /opt/bots/telegram/zaaduna/.env.example /opt/bots/telegram/zaaduna/.env
+# edit that .env: BOT_TOKEN, CHANNEL_CHAT_ID, TZ_NAME, NODE_ENV=production
+```
+
+A single `docker-compose.yml` at `/opt/bots` runs every bot, one service
+each:
+
+```yaml
+services:
+  zaaduna:
+    build: ./telegram/zaaduna
+    env_file: ./telegram/zaaduna/.env
+    restart: unless-stopped
+    volumes:
+      - zaaduna-data:/app/data
+
+volumes:
+  zaaduna-data:
+```
+
+Bring it up (the same command rebuilds after a code change):
+
+```bash
+cd /opt/bots
+docker compose up -d --build zaaduna
+docker compose logs -f zaaduna
+```
+
+Notes:
+
+- The image runs as a non-root user, so state lives in a **named volume**
+  (`zaaduna-data`), not a bind mount — the named volume inherits the
+  right ownership automatically and survives restarts and redeploys.
+- `restart: unless-stopped` brings the bot back after a reboot or crash.
+- Only **one** process may long-poll a given bot token. When migrating
+  from another host, stop the old one first or Telegram returns
+  `409 Conflict`.
+- Redeploy by hand with `git pull` in the bot's folder, then
+  `docker compose up -d --build zaaduna`. For push-to-deploy, see the
+  GitHub Action in `.github/workflows/deploy.yml`.
+
+## Fly.io (fallback)
+
+Fly.io is no longer the primary host (see the Docker Compose section
+above), but the `Dockerfile`, `fly.toml`, and the full **`FLYIO.md`**
+walkthrough are kept in the repo so you can return to it. The short
+version:
 
 ```bash
 fly apps create zaaduna

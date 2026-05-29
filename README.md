@@ -203,14 +203,16 @@ the second form and not re-fire a notification or break the pin.
 
 ## Deploying
 
-See `docs/DEPLOY.md` for the host-agnostic notes (env vars, channel
-admin rights, state file). For Fly.io specifically there is a full
-walkthrough in `FLYIO.md` at the repo root (Dockerfile + fly.toml are
-already in the repo).
+See `docs/DEPLOY.md` for the full notes (env vars, channel admin rights,
+state file). It runs in production as a Docker container on a small VPS,
+managed by Docker Compose — that section is the primary path. Fly.io is
+kept as a fallback with its own walkthrough in `FLYIO.md`. Every push to
+`main` auto-deploys to the server via `.github/workflows/deploy.yml`
+(once the `SERVER_IP` and `SSH_KEY` secrets are set).
 
-In short: a host that keeps the process alive, `pnpm build` then
-`pnpm start`, the env vars set, and the bot added to the channel as
-an admin with **both** "Post messages" and "Delete messages" granted.
+In short: a host that keeps the process alive (a VPS with Docker, or any
+PaaS), the env vars set, and the bot added to the channel as an admin
+with **both** "Post messages" and "Delete messages" granted.
 
 ## What this is NOT
 

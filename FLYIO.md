@@ -1,5 +1,9 @@
 # Deploying Zaaduna on Fly.io
 
+> **Note:** Fly.io is now a **fallback**. The primary deploy is Docker
+> Compose on a VPS — see the "Docker Compose on a VPS" section in
+> `docs/DEPLOY.md`. This file is kept for anyone who wants to run on Fly.
+
 This file is everything you need to know about running this bot on
 [Fly.io](https://fly.io). It is written in simple steps so a new
 developer can follow it without prior Fly.io experience.

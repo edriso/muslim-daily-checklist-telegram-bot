@@ -1,0 +1,31 @@
+# Push-to-deploy: on every push to main, SSH into the VPS, pull the
+# latest code, and rebuild just this bot's container.
+#
+# Required GitHub secrets (repo -> Settings -> Secrets and variables ->
+# Actions -> New repository secret):
+#   SERVER_IP  the VPS IP (e.g. <your-server-ip>)
+#   SSH_KEY    a private SSH key whose public half is in the server's
+#              /root/.ssh/authorized_keys
+#
+# Until both secrets are set, this workflow fails at the connect step —
+# that is expected; add the secrets to activate it.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /opt/bots/telegram/zaaduna && git pull
+            cd /opt/bots && docker compose up -d --build zaaduna
+            docker image prune -f
