@@ -41,6 +41,16 @@ interface BaseSchedule {
    *   - N>1 ⇒ keep the latest N.
    */
   keepLast?: number;
+  /**
+   * Optional fire-time guard. If it returns true the fire is skipped:
+   * nothing is posted and the ring buffer is left untouched (same effect
+   * as empty content). Pure function of `now` so it stays unit-testable.
+   * Used by fasting_reminder to suppress the Mon/Thu nudge when TOMORROW
+   * is a day nafl fasting is forbidden (Eid / أيام التشريق) — see
+   * lib/hijri.ts. Adding it here (not as a name check in the scheduler)
+   * keeps "a new schedule needs no framework change" intact.
+   */
+  skipIf?: (now: Date) => boolean;
 }
 
 /** Posts a text message. `content` may be a fixed string or, if an

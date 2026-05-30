@@ -1,5 +1,6 @@
 import type { PollSpec } from '../types';
 import { config } from '../config';
+import { noFastReason } from '../lib/hijri';
 
 /**
  * The nightly self-review poll: anonymous + multiple-answer, so nobody
@@ -52,6 +53,12 @@ interface DayOption {
    * misordered poll.
    */
   after?: string;
+  /**
+   * Mark a "did you fast?" option. These are removed on days nafl fasting
+   * is forbidden (Eid / أيام التشريق) — there was no fast to tick. Set it
+   * on any future fasting extra; non-fasting day options stay untouched.
+   */
+  fasting?: boolean;
 }
 
 // Insert fasting after خشوع الصلاة (last of the day's worship), before
@@ -62,8 +69,8 @@ const FASTING_ANCHOR = 'اجتهدت في خشوع صلاتي وطمأنينته
 // EDIT POINT for day variants: add a key (e.g. 5 for a Friday list) here;
 // buildNightReviewPoll needs no change.
 const OPTIONS_BY_DAY: Record<number, readonly DayOption[]> = {
-  1: [{ option: 'صيام الاثنين 🌒', after: FASTING_ANCHOR }], // Monday
-  4: [{ option: 'صيام الخميس 🌒', after: FASTING_ANCHOR }], // Thursday
+  1: [{ option: 'صيام الاثنين 🌒', after: FASTING_ANCHOR, fasting: true }], // Monday
+  4: [{ option: 'صيام الخميس 🌒', after: FASTING_ANCHOR, fasting: true }], // Thursday
 };
 
 /** Weekday in `tz` (0=Sun..6=Sat) via Intl, not Date.getDay(), so
@@ -100,7 +107,13 @@ export function buildNightReviewPoll(
   tz: string = config.timezone,
 ): PollSpec {
   const day = weekdayInTz(now, tz);
-  const options = applyDayOptions(BASE_OPTIONS, OPTIONS_BY_DAY[day] ?? []);
+  // On a day nafl fasting is forbidden (Eid / أيام التشريق) there was no
+  // fast to tick, so drop the fasting option — `now` is TODAY, the day the
+  // poll reviews. Only fasting-flagged extras go; any future non-fasting
+  // day option survives. The base nine deeds always stand.
+  const allExtras = OPTIONS_BY_DAY[day] ?? [];
+  const extras = noFastReason(now, tz) ? allExtras.filter((e) => !e.fasting) : allExtras;
+  const options = applyDayOptions(BASE_OPTIONS, extras);
 
   return {
     question: QUESTION,

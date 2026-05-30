@@ -24,6 +24,13 @@ const tasks: ScheduledTask[] = [];
  * Exported so /admin_run fires the exact same path. See CLAUDE.md.
  */
 export async function runSchedule(bot: Bot<Context>, def: ScheduleDef): Promise<number | null> {
+  if (def.skipIf?.(new Date())) {
+    // Guard says don't post tonight (e.g. fasting nudge on an Eid/Tashreeq
+    // eve). Leave the ring buffer untouched, like a no-content fire.
+    logger.info('Schedule skipped by guard', { name: def.name });
+    return null;
+  }
+
   const keepLast = effectiveKeepLast(def);
 
   const newId = await sendForKind(bot, def);

@@ -54,6 +54,12 @@ docs/DEPLOY.md    How to deploy
 | `pre_sleep`         | every day 21:43 | سورة المُلك + أذكار النوم + نيّة قيام الليل               |
 | `night_review_poll` | every day 21:45 | Anonymous self-review **poll** (the deeds; Mon/Thu nights add صيام)                |
 
+Both fasting touchpoints are **Hijri-aware**: the Mon/Thu reminder and
+the poll's «صيام» option are automatically withheld on days voluntary
+fasting is forbidden — the two Eids and أيام التشريق — read from the Umm
+al-Qura calendar in `TZ_NAME`. عرفة is never withheld. See
+`src/lib/hijri.ts`.
+
 Posts are deliberately grouped into one tight window so they arrive
 together as a single "session" instead of scattered buzzes. What makes
 people mute a channel is the number of separate interruption moments,
@@ -138,8 +144,9 @@ Everything lives in source. No database; restart (or redeploy) to apply.
 - **The poll:** edit `src/content/poll.ts` (the question and its
   options). Keep it anonymous and multiple-answer, that is the whole
   point. The list is built at fire time so Monday and Thursday nights
-  add a «صيام الاثنين/الخميس» option to the base 9. Stay at 9 in the
-  base or the Mon/Thu variant overflows Telegram's 10-option limit.
+  add a «صيام الاثنين/الخميس» option to the base 9 (withheld on Eid /
+  أيام التشريق — see `src/lib/hijri.ts`). Stay at 9 in the base or the
+  Mon/Thu variant overflows Telegram's 10-option limit.
 - **Times or new entries:** edit `src/schedules.ts`. Each entry is one
   cron rule plus `kind: 'message'` (with `content`) or `kind: 'poll'`
   (with `poll`).

@@ -3,6 +3,7 @@ import cron from 'node-cron';
 import { schedules, findSchedule } from './schedules';
 import { MIN_CLOSE_HOURS, MAX_CLOSE_HOURS, rtlIsolate } from './lib/post';
 import { buildNightReviewPoll } from './content/poll';
+import { hijriDate } from './lib/hijri';
 import type { PollSpec } from './types';
 
 /**
@@ -164,6 +165,71 @@ describe('poll schedules', () => {
       expect(thu.options.some((o) => o.includes('صيام الخميس'))).toBe(true);
       expect(wed.options.some((o) => o.includes('صيام'))).toBe(false);
     });
+
+    // The poll reviews TODAY, so on a day nafl fasting is forbidden the
+    // «هل صمت؟» option must vanish even though it is Mon/Thu. Mon 2024-06-17
+    // = 11 ذو الحجة (أيام التشريق); the fasting bug surfaced exactly here.
+    it('drops the fasting option on a Tashreeq Monday', () => {
+      const tashreeqMon = buildNightReviewPoll(new Date('2024-06-17T18:45:00Z'), 'Africa/Cairo');
+      expect(tashreeqMon.options.some((o) => o.includes('صيام'))).toBe(false);
+      expect(tashreeqMon.options.length).toBe(9);
+    });
+
+    it('keeps the fasting option on an ordinary Monday', () => {
+      // Mon 2024-06-10 = 4 ذو الحجة — fasting allowed.
+      const normalMon = buildNightReviewPoll(new Date('2024-06-10T18:45:00Z'), 'Africa/Cairo');
+      expect(normalMon.options.some((o) => o.includes('صيام الاثنين'))).toBe(true);
+      expect(normalMon.options.length).toBe(10);
+    });
+  });
+});
+
+describe('fasting_reminder no-fast guard', () => {
+  // The reminder fires Sun/Wed evening about TOMORROW's fast, so its
+  // skipIf suppresses it when tomorrow is Eid / أيام التشريق.
+  const reminder = findSchedule('fasting_reminder');
+
+  it('has a skipIf guard', () => {
+    expect(reminder?.skipIf).toBeTypeOf('function');
+  });
+
+  it('skips the Sunday nudge before a Tashreeq Monday, fires on an ordinary night', () => {
+    // Sun 2024-06-16 (Eid) eve → tomorrow Mon 06-17 = 11 ذو الحجة → skip.
+    expect(reminder!.skipIf!(new Date('2024-06-16T18:40:00Z'))).toBe(true);
+    // Sun 2024-06-09 → tomorrow Mon 06-10 = 4 ذو الحجة → fire.
+    expect(reminder!.skipIf!(new Date('2024-06-09T18:40:00Z'))).toBe(false);
+  });
+});
+
+// A real, recent incident, pinned as a regression: Eid al-Adha 1447 fell
+// on Wed 2026-05-27 (Umm al-Qura, Cairo), so Thu 2026-05-28 was 11 ذو
+// الحجة — the first day of أيام التشريق. Before the fix the Wednesday-eve
+// nudge told people to fast that Thursday and the Thursday-night poll
+// offered «صيام الخميس». Both must now be gone, and the reminder must
+// resume the moment Tashreeq ends.
+describe('regression — أيام التشريق 1447 (Thu 2026-05-28)', () => {
+  const TZ = 'Africa/Cairo';
+  const reminder = findSchedule('fasting_reminder')!;
+
+  it('confirms Thu 2026-05-28 really was a Tashreeq day (11 ذو الحجة)', () => {
+    expect(hijriDate(new Date('2026-05-28T18:00:00Z'), TZ)).toEqual({ month: 12, day: 11 });
+  });
+
+  it('suppresses the Wednesday-eve nudge that caused the bug', () => {
+    // fasting_reminder fires Wed 2026-05-27 evening, about Thu 2026-05-28.
+    expect(reminder.skipIf!(new Date('2026-05-27T18:40:00Z'))).toBe(true);
+  });
+
+  it('drops «صيام» from that Thursday night’s review poll', () => {
+    const poll = buildNightReviewPoll(new Date('2026-05-28T18:45:00Z'), TZ);
+    expect(poll.options.some((o) => o.includes('صيام'))).toBe(false);
+    expect(poll.options.length).toBe(9);
+  });
+
+  it('resumes once Tashreeq ends — fires again for Mon 2026-06-01 (15 ذو الحجة)', () => {
+    // Sun 2026-05-31 (14 ذو الحجة, the +1 cushion) eve → tomorrow Mon
+    // 06-01 = 15 ذو الحجة, fasting allowed again → nudge fires.
+    expect(reminder.skipIf!(new Date('2026-05-31T18:40:00Z'))).toBe(false);
   });
 });
 

@@ -179,6 +179,37 @@ describe('runSchedule replace-on-next-fire (messages only)', () => {
     expect(getLastMessageId('untracked_poll')).toBeUndefined();
   });
 
+  it('a skipIf guard posts nothing and leaves the ring buffer untouched', async () => {
+    const { bot, sendMessage, deleteMessage } = fakeBot();
+    await setLastMessageId('guarded', 900); // pre-seed a previous post
+    const guarded: ScheduleDef = {
+      name: 'guarded',
+      kind: 'message',
+      cron: '0 3 * * *',
+      content: 'hello',
+      skipIf: () => true,
+    };
+
+    await expect(runSchedule(bot, guarded)).resolves.toBeNull();
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(getLastMessageId('guarded')).toBe(900); // previous copy survives
+  });
+
+  it('a skipIf returning false posts as usual', async () => {
+    const { bot, sendMessage } = fakeBot();
+    const open: ScheduleDef = {
+      name: 'open',
+      kind: 'message',
+      cron: '0 3 * * *',
+      content: 'hello',
+      skipIf: () => false,
+    };
+    await expect(runSchedule(bot, open)).resolves.toBe(11);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('different schedules track their pointers independently', async () => {
     const sendMessage = vi
       .fn()

@@ -4,6 +4,8 @@ import { preSleepReminder } from './content/preSleep';
 import { fridaySunnah } from './content/fridaySunnah';
 import { fastingReminder } from './content/fasting';
 import { buildNightReviewPoll } from './content/poll';
+import { fastForbiddenTomorrow } from './lib/hijri';
+import { config } from './config';
 import type { ScheduleDef } from './types';
 
 export type { ScheduleDef } from './types';
@@ -64,7 +66,12 @@ export const schedules: ScheduleDef[] = [
     kind: 'message',
     cron: '40 21 * * 0,3',
     content: fastingReminder,
-    description: 'تذكير صيام الإثنين/الخميس، مساء الأحد والأربعاء 9:40 م (مع مجموعة ما قبل النوم).',
+    // Skip the nudge when TOMORROW (the fast day) is one nafl fasting is
+    // forbidden — Eid or أيام التشريق. Narrow/asymmetric so يوم عرفة is
+    // never suppressed; see lib/hijri.ts.
+    skipIf: (now) => fastForbiddenTomorrow(now, config.timezone),
+    description:
+      'تذكير صيام الإثنين/الخميس، مساء الأحد والأربعاء 9:40 م (مع مجموعة ما قبل النوم). يُتخطّى تلقائيًّا إن كان الغد عيدًا أو من أيّام التشريق.',
   },
   {
     name: 'pre_sleep',

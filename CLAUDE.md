@@ -94,6 +94,24 @@ zaaduna/
   intact across day-types. Day-of-week is computed in `config.timezone`
   via `Intl.DateTimeFormat`, never `Date.getDay()` (which would read
   the host TZ).
+- **No-fast days are skipped (Hijri-aware, `lib/hijri.ts`).** Voluntary
+  fasting is forbidden on عيد الفطر، عيد الأضحى، وأيّام التشريق. The
+  Mon/Thu nudge runs on a Gregorian cron with no Hijri sense, so it once
+  told people to fast on a Tashreeq day. Fix: `noFastReason` reads the
+  **Umm al-Qura** calendar baked into Node's ICU
+  (`-u-ca-islamic-umalqura`) in `config.timezone` (same discipline as
+  `weekdayInTz`). `fasting_reminder` carries a generic `skipIf` guard
+  (see `types.ts`) that suppresses the post when **tomorrow** is a
+  no-fast day; `buildNightReviewPoll` drops the «صيام» option when
+  **today** is one (the poll reviews the day ending — different day
+  reference). The window is **narrow, asymmetric, Arafah-aware**: شوّال 1
+  only (no cushion — شوّال 2+ is the ستّ من شوّال Sunnah); ذو الحجة 10–13
+  plus a **+1 forward** cushion (day 14) for the late-sighting drift —
+  but **never backward onto ذو الحجة 9 (عرفة)**, the most virtuous nafl
+  fast. Umm al-Qura is calculated, so the pinned `welcome.ts` caveat (and
+  the reader's own local Eid knowledge) is the backstop for the rare
+  opposite drift — the reminder itself stays clean year-round, no
+  per-fire disclaimer. We never trust the calculation alone for a ruling.
 - **Channel text uses NO `parse_mode`.** Arabic du'a/Quran references
   contain `* _ ( ) <` etc. that Markdown/HTML would 400 on. Plain text
   renders Arabic + emoji perfectly. Deliberate simplicity-over-styling.
@@ -201,9 +219,12 @@ fills then evicts oldest on third fire, failed posts leave state,
 `lib/state.ts` (empty/corrupt file resilience,
 legacy single-number migration, array round-trip, clear-on-empty,
 parent-dir creation), `startScheduler` skipping an invalid cron,
-`pickContent` (blank and array handling), `channelUrlFrom`, and
-`resolvePort`. The count is intentionally not stated here so it never
-goes stale.
+`pickContent` (blank and array handling), `channelUrlFrom`,
+`resolvePort`, the `skipIf` guard (skips the post + leaves the ring
+buffer untouched), and `lib/hijri.ts` (Umm al-Qura mapping; Eid/Tashreeq
+suppression incl. the +1 day-14 cushion; عرفة and ستّ من شوّال never
+suppressed; the poll drops «صيام» on a Tashreeq day). The count is
+intentionally not stated here so it never goes stale.
 
 `pnpm send-test` runs `scripts/send-test.ts`: a manual dev tool that
 fires every schedule once via the same `runSchedule` the cron loop
